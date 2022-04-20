@@ -1,5 +1,7 @@
 use crate::colour::Colour;
 
+use font8x8::{UnicodeFonts, BASIC_FONTS};
+
 pub struct Screen<'a> {
     buffer: &'a mut [u8],
     info: &'a bootloader::boot_info::FrameBufferInfo,
@@ -34,6 +36,26 @@ impl<'a> Screen<'a> {
                 pixel[..1].copy_from_slice(&[colour.r]);
             }
             _ => unimplemented!(),
+        }
+    }
+
+    pub fn write_char(&mut self, c: char, base_row: usize, base_col: usize, colour: Colour) {
+        let font = BASIC_FONTS.get(c).unwrap();
+        for (row, font_row) in font.into_iter().enumerate() {
+            for col in 0..8 {
+                if font_row & 1 << col != 0 {
+                    let pixel_row = base_row + row;
+                    let pixel_col = base_col + col;
+
+                    self.set_pixel(pixel_row, pixel_col, colour);
+                }
+            }
+        }
+    }
+
+    pub fn write_chars(&mut self, chars: &str, base_row: usize, base_col: usize, colour: Colour) {
+        for (i, c) in chars.chars().enumerate() {
+            self.write_char(c, base_row, base_col + 8 * i, colour);
         }
     }
 }

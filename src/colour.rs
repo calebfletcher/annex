@@ -74,7 +74,7 @@ impl FromStr for Colour {
 }
 
 #[allow(dead_code)]
-pub static BLACK: Colour = Colour::new(0xFF, 0x00, 0x00);
+pub static BLACK: Colour = Colour::new(0x00, 0x00, 0x00);
 #[allow(dead_code)]
 pub static WHITE: Colour = Colour::new(0xFF, 0xFF, 0xFF);
 #[allow(dead_code)]

@@ -7,6 +7,7 @@ name = "annex"
 version = "0.1.0"
 dependencies = [
  "bootloader",
+ "font8x8",
 ]
 
 [[package]]
@@ -14,3 +15,9 @@ name = "bootloader"
 version = "0.10.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2d9b14b92a825ecc3b24e4c163a578af473fbba5f190bfaf48092b29b604504"
+
+[[package]]
+name = "font8x8"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "875488b8711a968268c7cf5d139578713097ca4635a76044e8fe8eedf831d07e"
