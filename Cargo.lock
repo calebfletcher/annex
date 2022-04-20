@@ -5,3 +5,12 @@ version = 3
 [[package]]
 name = "annex"
 version = "0.1.0"
+dependencies = [
+ "bootloader",
+]
+
+[[package]]
+name = "bootloader"
+version = "0.10.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2d9b14b92a825ecc3b24e4c163a578af473fbba5f190bfaf48092b29b604504"

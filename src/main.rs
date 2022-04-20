@@ -3,8 +3,9 @@
 
 mod panic;
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+
+bootloader::entry_point!(entry_point);
+fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[allow(clippy::empty_loop)]
     loop {}
 }
