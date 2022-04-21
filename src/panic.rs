@@ -6,6 +6,16 @@ use core::fmt::Write;
 /// This function is called on panic.
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    // If running in a debug build, force the kernel panic to be shown, regardless
+    // of what was happening when it occurred. This can be used to diagnose issues
+    // with the graphics system.
+    #[cfg(debug_assertions)]
+    unsafe {
+        let cnsl = screen::CONSOLE.get_unchecked();
+        cnsl.force_unlock();
+        cnsl.lock().goto(0, 0);
+    };
+
     // Try to print an error message if possible
     if let Ok(cnsl) = screen::CONSOLE.try_get() {
         if let Some(mut cnsl) = cnsl.try_lock() {
