@@ -13,21 +13,21 @@ pub struct TextColour {
 }
 
 impl TextColour {
-    const fn new(foreground: Colour, background: Colour) -> Self {
+    pub const fn new(foreground: Colour, background: Colour) -> Self {
         Self {
             foreground: Some(foreground),
             background: Some(background),
         }
     }
     #[allow(dead_code)]
-    const fn from_foreground(foreground: Colour) -> Self {
+    pub const fn from_foreground(foreground: Colour) -> Self {
         Self {
             foreground: Some(foreground),
             background: None,
         }
     }
     #[allow(dead_code)]
-    const fn from_background(background: Colour) -> Self {
+    pub const fn from_background(background: Colour) -> Self {
         Self {
             foreground: None,
             background: Some(background),
@@ -42,19 +42,17 @@ pub static BLACK_ON_WHITE: TextColour = TextColour::new(colour::BLACK, colour::W
 
 pub struct Screen<'a> {
     buffer: &'a mut [u8],
-    info: &'a bootloader::boot_info::FrameBufferInfo,
+    info: bootloader::boot_info::FrameBufferInfo,
 }
 
 impl<'a> Screen<'a> {
-    pub fn new(buffer: &'a mut [u8], info: &'a bootloader::boot_info::FrameBufferInfo) -> Self {
+    pub fn new(buffer: &'a mut [u8], info: bootloader::boot_info::FrameBufferInfo) -> Self {
         Self { buffer, info }
     }
 
     pub fn clear(&mut self, colour: Colour) {
         for row in 0..self.info.vertical_resolution {
-            for col in 0..self.info.horizontal_resolution {
-                self.write_pixel(row, col, colour);
-            }
+            self.write_row(row, colour);
         }
     }
 
@@ -201,6 +199,15 @@ impl<'a> Console<'a> {
             self.screen.write_row(new_row, colour::BLACK);
         }
     }
+
+    pub fn clear(&mut self) {
+        self.screen.clear(colour::BLACK);
+    }
+
+    pub fn goto(&mut self, row: usize, col: usize) {
+        self.row = row;
+        self.col = col;
+    }
 }
 
 impl core::fmt::Write for Console<'_> {
@@ -208,4 +215,45 @@ impl core::fmt::Write for Console<'_> {
         self.write_colour(s, WHITE_ON_BLACK);
         Ok(())
     }
+}
+
+pub static CONSOLE: conquer_once::noblock::OnceCell<spin::mutex::SpinMutex<Console>> =
+    conquer_once::noblock::OnceCell::uninit();
+
+#[macro_export]
+macro_rules! print {
+        ($($arg:tt)*) => ($crate::screen::_print(format_args!($($arg)*)));
+    }
+
+#[macro_export]
+macro_rules! println {
+        () => ($crate::print!("\n"));
+        ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    }
+
+#[doc(hidden)]
+pub fn _print(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    CONSOLE.try_get().unwrap().lock().write_fmt(args).unwrap();
+}
+
+#[macro_export]
+macro_rules! dbg {
+    () => {
+        $crate::println!("[{}:{}]", $crate::file!(), $crate::line!())
+    };
+    ($val:expr $(,)?) => {
+        // Use of `match` here is intentional because it affects the lifetimes
+        // of temporaries - https://stackoverflow.com/a/48732525/1063961
+        match $val {
+            tmp => {
+                $crate::println!("[{}:{}] {} = {:#?}",
+                    file!(), line!(), stringify!($val), &tmp);
+                tmp
+            }
+        }
+    };
+    ($($val:expr),+ $(,)?) => {
+        ($($crate::dbg!($val)),+,)
+    };
 }

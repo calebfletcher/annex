@@ -1,12 +1,9 @@
 #![no_std]
 #![no_main]
-#![feature(slice_as_chunks)]
 
 mod colour;
 mod panic;
 mod screen;
-
-use core::fmt::Write;
 
 static MSG: &str = "Hello World!";
 
@@ -16,16 +13,20 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let buffer_info = frame_buffer.info();
     let buffer = frame_buffer.buffer_mut();
 
-    let mut screen = screen::Screen::new(buffer, &buffer_info);
+    // Initialise screen
+    let mut screen = screen::Screen::new(buffer, buffer_info);
     screen.clear(colour::BLACK);
 
-    let mut console = screen::Console::new(screen);
+    // Initialise text console
+    init_console(screen);
 
-    writeln!(console, "something {}", 1. / 3.).unwrap();
-    writeln!(console, "{}", MSG).unwrap();
+    println!("something {}", 1. / 3.);
+    println!("{}", MSG);
+
+    dbg!(colour::BLACK);
 
     for i in 0..100 {
-        writeln!(console, "row {}", i).unwrap();
+        println!("row {}", i);
         delay(10);
     }
 
@@ -40,4 +41,12 @@ fn delay(factor: usize) {
             core::ptr::read_volatile(&value);
         }
     }
+}
+
+fn init_console(screen: screen::Screen<'static>) {
+    let console = screen::Console::new(screen);
+
+    screen::CONSOLE
+        .try_init_once(move || spin::mutex::SpinMutex::new(console))
+        .unwrap();
 }
