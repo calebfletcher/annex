@@ -1,4 +1,5 @@
 use crate::colour::{self, Colour};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextColour {
     foreground: Option<Colour>,
@@ -253,16 +254,4 @@ macro_rules! dbg {
     ($($val:expr),+ $(,)?) => {
         ($($crate::dbg!($val)),+,)
     };
-}
-
-#[test_case]
-fn test_println_simple() {
-    println!("test_println_simple output");
-}
-
-#[test_case]
-fn test_println_many() {
-    for _ in 0..100 {
-        println!("test_println_many output");
-    }
 }

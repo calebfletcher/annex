@@ -8,7 +8,9 @@ edition = "2021"
 [dependencies]
 bootloader = "0.10.12"
 conquer-once = { version = "0.3.2", default-features = false }
-lazy_static = { version = "1.4.0", features = ["spin_no_std"], default-features = false }
+lazy_static = { version = "1.4.0", features = [
+    "spin_no_std",
+], default-features = false }
 noto-sans-mono-bitmap = { version = "0.1.5", features = [
     "regular",
     "size_14",
@@ -22,3 +24,8 @@ x86_64 = "0.14.9"
 [package.metadata.bootloader]
 #minimum-framebuffer-height = 500
 minimum-framebuffer-width = 800
+
+
+[[test]]
+name = "should_panic"
+harness = false

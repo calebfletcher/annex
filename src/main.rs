@@ -1,19 +1,13 @@
 #![no_std]
 #![no_main]
-#![feature(panic_info_message)]
 #![feature(custom_test_frameworks)]
-#![test_runner(crate::test::test_runner)]
+#![feature(panic_info_message)]
+#![test_runner(annex::test::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-mod colour;
-mod screen;
-mod serial;
+use annex::{colour, println, screen};
 
-#[cfg(not(test))]
 mod panic;
-
-#[cfg(test)]
-mod test;
 
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
@@ -22,7 +16,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let buffer = frame_buffer.buffer_mut();
 
     // Initialise screen
-    let mut screen = screen::Screen::new(buffer, buffer_info);
+    let mut screen = annex::screen::Screen::new(buffer, buffer_info);
     screen.clear(colour::BLACK);
 
     // Initialise text console
