@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(panic_info_message)]
 
 mod colour;
 mod panic;
@@ -30,8 +31,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
         delay(10);
     }
 
-    #[allow(clippy::empty_loop)]
-    loop {}
+    panic!("kernel loaded");
 }
 
 fn delay(factor: usize) {
