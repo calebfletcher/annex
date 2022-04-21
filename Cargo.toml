@@ -8,10 +8,13 @@ edition = "2021"
 [dependencies]
 bootloader = "0.10.12"
 conquer-once = { version = "0.3.2", default-features = false }
-font8x8 = { version = "0.3.1", default-features = false, features = [
-    "unicode",
-] }
-spin = { version = "0.9.3", features = ["spin_mutex"], default-features = false }
+noto-sans-mono-bitmap = { version = "0.1.5", features = [
+    "regular",
+    "size_14",
+], default-features = false }
+spin = { version = "0.9.3", features = [
+    "spin_mutex",
+], default-features = false }
 
 [package.metadata.bootloader]
 #minimum-framebuffer-height = 500

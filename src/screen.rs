@@ -1,11 +1,4 @@
 use crate::colour::{self, Colour};
-
-use font8x8::{UnicodeFonts, BASIC_FONTS};
-
-static CHAR_REPLACEMENT: [u8; 8] = [
-    0b11111111, 0b10000001, 0b10000001, 0b10000001, 0b10000001, 0b10000001, 0b10000001, 0b11111111,
-];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextColour {
     foreground: Option<Colour>,
@@ -73,28 +66,6 @@ impl<'a> Screen<'a> {
         }
     }
 
-    pub fn write_char(&mut self, c: char, base_row: usize, base_col: usize, colour: TextColour) {
-        let font = BASIC_FONTS.get(c).unwrap_or(CHAR_REPLACEMENT);
-        for (row, font_row) in font.into_iter().enumerate() {
-            for col in 0..8 {
-                let pixel_row = base_row + row;
-                let pixel_col = base_col + col;
-                if font_row & 1 << col != 0 {
-                    // Foreground
-
-                    if let Some(colour) = colour.foreground {
-                        self.write_pixel(pixel_row, pixel_col, colour);
-                    }
-                } else {
-                    // Background
-                    if let Some(colour) = colour.background {
-                        self.write_pixel(pixel_row, pixel_col, colour);
-                    }
-                }
-            }
-        }
-    }
-
     pub fn copy_row(&mut self, row_from: usize, row_to: usize) {
         let bytes_per_row = self.info.horizontal_resolution * self.info.bytes_per_pixel;
 
@@ -128,6 +99,8 @@ fn set_pixel_slice(
 
 pub struct Console<'a> {
     screen: Screen<'a>,
+    font_weight: noto_sans_mono_bitmap::FontWeight,
+    font_size: noto_sans_mono_bitmap::BitmapHeight,
     line_height: usize,
     width: usize,
     height: usize,
@@ -139,9 +112,15 @@ impl<'a> Console<'a> {
     pub fn new(screen: Screen<'a>) -> Self {
         let width = screen.info.horizontal_resolution;
         let height = screen.info.vertical_resolution;
+
+        let font_weight = noto_sans_mono_bitmap::FontWeight::Regular;
+        let font_size = noto_sans_mono_bitmap::BitmapHeight::Size14;
+
         Self {
             screen,
-            line_height: 8,
+            line_height: font_size.val() + 2,
+            font_weight,
+            font_size,
             width,
             height,
             row: 0,
@@ -149,24 +128,40 @@ impl<'a> Console<'a> {
         }
     }
 
-    pub fn write_char_colour(&mut self, c: char, colour: TextColour) {
-        match c {
-            '\n' => {
-                self.newline();
-            }
-            _ => {
-                self.screen.write_char(c, self.row, self.col, colour);
-                self.col += 8; // TODO: Support different font widths
-                if self.col >= self.width {
-                    self.newline();
-                }
-            }
-        }
-    }
-
     pub fn write_colour(&mut self, line: &str, colour: TextColour) {
         for c in line.chars() {
-            self.write_char_colour(c, colour);
+            match c {
+                '\n' => {
+                    self.newline();
+                }
+                _ => {
+                    if let Some(font) =
+                        noto_sans_mono_bitmap::get_bitmap(c, self.font_weight, self.font_size)
+                    {
+                        for (row_i, &row) in font.bitmap().iter().enumerate() {
+                            for (col_i, &pixel) in row.iter().enumerate() {
+                                let pixel_row = self.row + row_i;
+                                let pixel_col = self.col + col_i;
+                                if pixel > 40 {
+                                    // Foreground
+                                    if let Some(colour) = colour.foreground {
+                                        self.screen.write_pixel(pixel_row, pixel_col, colour);
+                                    }
+                                } else {
+                                    // Background
+                                    if let Some(colour) = colour.background {
+                                        self.screen.write_pixel(pixel_row, pixel_col, colour);
+                                    }
+                                }
+                            }
+                        }
+                        self.col += font.width();
+                        if self.col >= self.width {
+                            self.newline();
+                        }
+                    }
+                }
+            };
         }
     }
 
@@ -174,7 +169,7 @@ impl<'a> Console<'a> {
         self.row += self.line_height;
         self.col = 0;
 
-        if self.row >= self.height {
+        if self.row + self.line_height >= self.height {
             self.scroll_by(1);
             self.row -= self.line_height;
         }

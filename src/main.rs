@@ -6,8 +6,6 @@ mod colour;
 mod panic;
 mod screen;
 
-static MSG: &str = "Hello World!";
-
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let frame_buffer = info.framebuffer.as_mut().unwrap();
@@ -20,11 +18,6 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 
     // Initialise text console
     init_console(screen);
-
-    println!("something {}", 1. / 3.);
-    println!("{}", MSG);
-
-    dbg!(colour::BLACK);
 
     for i in 0..100 {
         println!("row {}", i);
