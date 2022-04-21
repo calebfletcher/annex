@@ -73,13 +73,27 @@ impl<'a> Screen<'a> {
         }
     }
 
-    pub fn write_char(&mut self, c: char, base_row: usize, base_col: usize, colour: TextColour) {
+    pub fn write_char(
+        &mut self,
+        c: char,
+        base_row: usize,
+        base_col: usize,
+        width_scale: usize,
+        height_scale: usize,
+        colour: TextColour,
+    ) {
         let font = BASIC_FONTS.get(c).unwrap_or(CHAR_REPLACEMENT);
-        for (row, font_row) in font.into_iter().enumerate() {
-            for col in 0..8 {
+
+        // Repeat each row `height_scale` times
+        for (row, font_row) in font
+            .into_iter()
+            .flat_map(|n| core::iter::repeat(n).take(height_scale))
+            .enumerate()
+        {
+            for col in 0..8 * width_scale {
                 let pixel_row = base_row + row;
                 let pixel_col = base_col + col;
-                if font_row & 1 << col != 0 {
+                if font_row & 1 << (col / width_scale) != 0 {
                     // Foreground
 
                     if let Some(colour) = colour.foreground {
@@ -129,6 +143,8 @@ fn set_pixel_slice(
 pub struct Console<'a> {
     screen: Screen<'a>,
     line_height: usize,
+    char_height_scale: usize,
+    char_width_scale: usize,
     width: usize,
     height: usize,
     row: usize,
@@ -141,12 +157,22 @@ impl<'a> Console<'a> {
         let height = screen.info.vertical_resolution;
         Self {
             screen,
-            line_height: 8,
+            line_height: 16,
+            char_height_scale: 2,
+            char_width_scale: 2,
             width,
             height,
             row: 0,
             col: 0,
         }
+    }
+
+    pub fn char_width(&self) -> usize {
+        self.char_width_scale * 8
+    }
+
+    pub fn char_height(&self) -> usize {
+        self.char_height_scale * 8
     }
 
     pub fn write_char_colour(&mut self, c: char, colour: TextColour) {
@@ -155,8 +181,15 @@ impl<'a> Console<'a> {
                 self.newline();
             }
             _ => {
-                self.screen.write_char(c, self.row, self.col, colour);
-                self.col += 8; // TODO: Support different font widths
+                self.screen.write_char(
+                    c,
+                    self.row,
+                    self.col,
+                    self.char_width_scale,
+                    self.char_height_scale,
+                    colour,
+                );
+                self.col += self.char_width();
                 if self.col >= self.width {
                     self.newline();
                 }
