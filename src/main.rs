@@ -16,7 +16,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let mut screen = screen::Screen::new(buffer, &buffer_info);
     screen.clear(colour::BLACK);
 
-    screen.write_chars(MSG, 0, 0, colour::WHITE);
+    screen.write_chars(MSG, 0, 0, screen::WHITE_ON_BLACK);
 
     #[allow(clippy::empty_loop)]
     loop {}

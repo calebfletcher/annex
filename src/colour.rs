@@ -1,6 +1,6 @@
 use core::str::FromStr;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Colour {
     pub r: u8,
     pub g: u8,
