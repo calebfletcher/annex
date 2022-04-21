@@ -23,7 +23,7 @@ build-image:
 build: build-kernel build-image
 
 qemu:
-    qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-annex.img
+    qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-annex.img -no-shutdown -no-reboot
 
 runner binary:
     just kernel_binary={{justfile_directory() + "/" + binary}} build-image
