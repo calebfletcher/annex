@@ -1,10 +1,19 @@
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::test::test_runner)]
+#![reexport_test_harness_main = "test_main"]
 
 mod colour;
-mod panic;
 mod screen;
+mod serial;
+
+#[cfg(not(test))]
+mod panic;
+
+#[cfg(test)]
+mod test;
 
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
@@ -18,6 +27,10 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 
     // Initialise text console
     init_console(screen);
+
+    // Run the tests if we're running under the test harness
+    #[cfg(test)]
+    test_main();
 
     for i in 0..100 {
         println!("row {}", i);
@@ -42,4 +55,9 @@ fn init_console(screen: screen::Screen<'static>) {
     screen::CONSOLE
         .try_init_once(move || spin::mutex::SpinMutex::new(console))
         .unwrap();
+}
+
+#[test_case]
+fn trivial_assertion() {
+    assert_eq!(1, 1);
 }

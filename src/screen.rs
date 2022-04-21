@@ -195,10 +195,12 @@ impl<'a> Console<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.screen.clear(colour::BLACK);
     }
 
+    #[allow(dead_code)]
     pub fn goto(&mut self, row: usize, col: usize) {
         self.row = row;
         self.col = col;
@@ -251,4 +253,16 @@ macro_rules! dbg {
     ($($val:expr),+ $(,)?) => {
         ($($crate::dbg!($val)),+,)
     };
+}
+
+#[test_case]
+fn test_println_simple() {
+    println!("test_println_simple output");
+}
+
+#[test_case]
+fn test_println_many() {
+    for _ in 0..100 {
+        println!("test_println_many output");
+    }
 }

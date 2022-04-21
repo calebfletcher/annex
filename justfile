@@ -7,6 +7,8 @@ target_dir := justfile_directory() + "/target"
 kernel_binary := target_dir + "/x86_64-annex/" + build + "/annex"
 out_dir := parent_directory(kernel_binary)
 
+is_test := if file_name(parent_directory(kernel_binary)) == "deps" { "true" } else { "false" }
+
 _default:
     just --list
 
@@ -18,16 +20,35 @@ build-image:
         cargo builder   --kernel-manifest {{justfile_directory()}}/Cargo.toml \
                         --kernel-binary {{kernel_binary}} \
                         --target-dir {{target_dir}} \
-                        --out-dir {{out_dir}}
+                        --out-dir {{out_dir}} \
+                        --quiet
 
 build: build-kernel build-image
 
+qemu-test:
+    #!/usr/bin/env bash
+    set -uxo pipefail
+
+    qemu-system-x86_64 \
+        -drive format=raw,file={{out_dir}}/boot-bios-{{file_name(kernel_binary)}}.img \
+        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+        -serial stdio -display none \
+        -no-shutdown -no-reboot; (( $?==33 ))
+
 qemu:
-    qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-annex.img -no-shutdown -no-reboot
+    #!/usr/bin/env bash
+    set -euxo pipefail
+
+    if {{is_test}}; then
+        timeout --foreground 60s just kernel_binary={{kernel_binary}} qemu-test
+    else
+        qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-{{file_name(kernel_binary)}}.img \
+            -no-shutdown -no-reboot; (( $?==33 ))
+    fi    
 
 runner binary:
-    just kernel_binary={{justfile_directory() + "/" + binary}} build-image
-    just kernel_binary={{justfile_directory() + "/" + binary}} qemu
+    just kernel_binary={{absolute_path(binary)}} build-image
+    just kernel_binary={{absolute_path(binary)}} qemu
 
 clean:
     cargo clean

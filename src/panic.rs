@@ -1,11 +1,10 @@
 use core::panic::PanicInfo;
 
-use crate::{colour, screen};
-use core::fmt::Write;
-
-/// This function is called on panic.
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    use crate::{colour, screen};
+    use core::fmt::Write;
+
     // If running in a debug build, force the kernel panic to be shown, regardless
     // of what was happening when it occurred. This can be used to diagnose issues
     // with the graphics system.

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 bootloader = "0.10.12"
 conquer-once = { version = "0.3.2", default-features = false }
+lazy_static = { version = "1.4.0", features = ["spin_no_std"], default-features = false }
 noto-sans-mono-bitmap = { version = "0.1.5", features = [
     "regular",
     "size_14",
@@ -15,6 +16,8 @@ noto-sans-mono-bitmap = { version = "0.1.5", features = [
 spin = { version = "0.9.3", features = [
     "spin_mutex",
 ], default-features = false }
+uart_16550 = "0.2.18"
+x86_64 = "0.14.9"
 
 [package.metadata.bootloader]
 #minimum-framebuffer-height = 500
