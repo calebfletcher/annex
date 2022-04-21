@@ -53,27 +53,25 @@ impl<'a> Screen<'a> {
     pub fn clear(&mut self, colour: Colour) {
         for row in 0..self.info.vertical_resolution {
             for col in 0..self.info.horizontal_resolution {
-                self.set_pixel(row, col, colour);
+                self.write_pixel(row, col, colour);
             }
         }
     }
 
     /// Set a pixel on the screen
-    pub fn set_pixel(&mut self, row: usize, col: usize, colour: Colour) {
+    pub fn write_pixel(&mut self, row: usize, col: usize, colour: Colour) {
         let offset = (row * self.info.stride + col) * self.info.bytes_per_pixel;
         let pixel = &mut self.buffer[offset..offset + self.info.bytes_per_pixel];
 
-        match self.info.pixel_format {
-            bootloader::boot_info::PixelFormat::RGB => {
-                pixel[..3].copy_from_slice(&[colour.r, colour.g, colour.b]);
-            }
-            bootloader::boot_info::PixelFormat::BGR => {
-                pixel[..3].copy_from_slice(&[colour.b, colour.g, colour.r]);
-            }
-            bootloader::boot_info::PixelFormat::U8 => {
-                pixel[..1].copy_from_slice(&[colour.r]);
-            }
-            _ => unimplemented!(),
+        set_pixel_slice(self.info.pixel_format, pixel, colour);
+    }
+
+    pub fn write_row(&mut self, row: usize, colour: Colour) {
+        let offset = row * self.info.stride * self.info.bytes_per_pixel;
+        let frame_line = &mut self.buffer
+            [offset..offset + (self.info.horizontal_resolution * self.info.bytes_per_pixel)];
+        for pixel in frame_line.chunks_exact_mut(self.info.bytes_per_pixel) {
+            set_pixel_slice(self.info.pixel_format, pixel, colour);
         }
     }
 
@@ -87,28 +85,46 @@ impl<'a> Screen<'a> {
                     // Foreground
 
                     if let Some(colour) = colour.foreground {
-                        self.set_pixel(pixel_row, pixel_col, colour);
+                        self.write_pixel(pixel_row, pixel_col, colour);
                     }
                 } else {
                     // Background
                     if let Some(colour) = colour.background {
-                        self.set_pixel(pixel_row, pixel_col, colour);
+                        self.write_pixel(pixel_row, pixel_col, colour);
                     }
                 }
             }
         }
     }
 
-    pub fn write_chars(
-        &mut self,
-        chars: &str,
-        base_row: usize,
-        base_col: usize,
-        colour: TextColour,
-    ) {
-        for (i, c) in chars.chars().enumerate() {
-            self.write_char(c, base_row, base_col + 8 * i, colour);
+    pub fn copy_row(&mut self, row_from: usize, row_to: usize) {
+        let bytes_per_row = self.info.horizontal_resolution * self.info.bytes_per_pixel;
+
+        let row_from_offset = row_from * self.info.stride * self.info.bytes_per_pixel;
+        let row_from = row_from_offset..row_from_offset + bytes_per_row;
+
+        let row_to_offset = row_to * self.info.stride * self.info.bytes_per_pixel;
+
+        self.buffer.copy_within(row_from, row_to_offset);
+    }
+}
+
+fn set_pixel_slice(
+    pixel_format: bootloader::boot_info::PixelFormat,
+    pixel: &mut [u8],
+    colour: Colour,
+) {
+    match pixel_format {
+        bootloader::boot_info::PixelFormat::RGB => {
+            pixel[..3].copy_from_slice(&[colour.r, colour.g, colour.b]);
         }
+        bootloader::boot_info::PixelFormat::BGR => {
+            pixel[..3].copy_from_slice(&[colour.b, colour.g, colour.r]);
+        }
+        bootloader::boot_info::PixelFormat::U8 => {
+            pixel[..1].copy_from_slice(&[colour.r]);
+        }
+        _ => unimplemented!(),
     }
 }
 
@@ -159,6 +175,31 @@ impl<'a> Console<'a> {
     pub fn newline(&mut self) {
         self.row += self.line_height;
         self.col = 0;
+
+        if self.row >= self.height {
+            self.scroll_by(1);
+            self.row -= self.line_height;
+        }
+    }
+
+    /// Scroll the terminal up by `n` lines.
+    ///
+    /// After this has been called, the cursor will be in the same place on the
+    /// screen, i.e. will seem to have been moved `n` lines down in the content.
+    pub fn scroll_by(&mut self, n: usize) {
+        let pixel_delta = n * self.line_height;
+
+        // Move existing content up
+        for new_row in 0..(self.height - pixel_delta).max(0) {
+            let old_row = new_row + pixel_delta;
+
+            self.screen.copy_row(old_row, new_row);
+        }
+
+        // Blank lines that have come in
+        for new_row in (self.height - pixel_delta).max(0)..self.height {
+            self.screen.write_row(new_row, colour::BLACK);
+        }
     }
 }
 

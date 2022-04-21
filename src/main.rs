@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(slice_as_chunks)]
 
 mod colour;
 mod panic;
@@ -23,6 +24,20 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     writeln!(console, "something {}", 1. / 3.).unwrap();
     writeln!(console, "{}", MSG).unwrap();
 
+    for i in 0..100 {
+        writeln!(console, "row {}", i).unwrap();
+        delay(10);
+    }
+
     #[allow(clippy::empty_loop)]
     loop {}
+}
+
+fn delay(factor: usize) {
+    let value = 0;
+    for _ in 0..factor * 1000000 {
+        unsafe {
+            core::ptr::read_volatile(&value);
+        }
+    }
 }
