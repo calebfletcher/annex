@@ -11,22 +11,14 @@ mod panic;
 
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
-    let frame_buffer = info.framebuffer.as_mut().unwrap();
-    let buffer_info = frame_buffer.info();
-    let buffer = frame_buffer.buffer_mut();
-
-    // Initialise screen
-    let mut screen = annex::screen::Screen::new(buffer, buffer_info);
-    screen.clear(colour::BLACK);
-
-    // Initialise text console
-    init_console(screen);
+    annex::init(info);
+    println!("hello");
 
     // Run the tests if we're running under the test harness
     #[cfg(test)]
     test_main();
 
-    for i in 0..100 {
+    for i in 0..10 {
         println!("row {}", i);
         delay(10);
     }
@@ -41,14 +33,6 @@ fn delay(factor: usize) {
             core::ptr::read_volatile(&value);
         }
     }
-}
-
-fn init_console(screen: screen::Screen<'static>) {
-    let console = screen::Console::new(screen);
-
-    screen::CONSOLE
-        .try_init_once(move || spin::mutex::SpinMutex::new(console))
-        .unwrap();
 }
 
 #[test_case]

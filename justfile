@@ -43,7 +43,7 @@ qemu:
         timeout --foreground 60s just kernel_binary={{kernel_binary}} qemu-test
     else
         qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-{{file_name(kernel_binary)}}.img \
-            -no-shutdown -no-reboot; (( $?==33 ))
+            -no-shutdown -no-reboot
     fi    
 
 runner binary:
