@@ -6,10 +6,11 @@
 #![reexport_test_harness_main = "test_main"]
 
 pub mod colour;
+pub mod gdt;
+pub mod interrupts;
 pub mod screen;
 pub mod serial;
 
-pub mod interrupts;
 #[allow(unused_imports)]
 pub mod test;
 
@@ -25,6 +26,7 @@ pub fn init(info: &'static mut bootloader::BootInfo) {
     // Initialise text console
     init_console(screen);
 
+    gdt::init();
     interrupts::init_idt();
 }
 
