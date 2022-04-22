@@ -28,6 +28,9 @@ pub fn init(info: &'static mut bootloader::BootInfo) {
 
     gdt::init();
     interrupts::init_idt();
+    unsafe { interrupts::PICS.lock().initialize() };
+
+    x86_64::instructions::interrupts::enable();
 }
 
 fn init_console(screen: screen::Screen<'static>) {

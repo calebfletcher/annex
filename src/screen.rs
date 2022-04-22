@@ -1,3 +1,5 @@
+use x86_64::instructions::interrupts;
+
 use crate::colour::{self, Colour};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -232,7 +234,9 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;
-    CONSOLE.try_get().unwrap().lock().write_fmt(args).unwrap();
+    interrupts::without_interrupts(|| {
+        CONSOLE.try_get().unwrap().lock().write_fmt(args).unwrap();
+    });
 }
 
 #[macro_export]
