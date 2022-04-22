@@ -41,11 +41,17 @@ fn init_console(screen: screen::Screen<'static>) {
         .unwrap();
 }
 
+pub fn hlt_loop() -> ! {
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
 #[cfg(test)]
 bootloader::entry_point!(entry_point);
 #[cfg(test)]
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     init(info);
     test_main();
-    loop {}
+    hlt_loop();
 }

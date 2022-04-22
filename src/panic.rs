@@ -36,5 +36,5 @@ fn panic(info: &PanicInfo) -> ! {
         }
     }
 
-    loop {}
+    annex::hlt_loop();
 }

@@ -23,7 +23,8 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
         delay(10);
     }
 
-    panic!("kernel loaded");
+    println!("kernel loaded");
+    annex::hlt_loop();
 }
 
 fn delay(factor: usize) {
