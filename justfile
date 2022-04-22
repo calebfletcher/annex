@@ -32,8 +32,7 @@ qemu-test:
     qemu-system-x86_64 \
         -drive format=raw,file={{out_dir}}/boot-bios-{{file_name(kernel_binary)}}.img \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-        -serial stdio -display none \
-        -no-shutdown -no-reboot; (( $?==33 ))
+        -serial stdio -display none; (( $?==33 ))
 
 qemu:
     #!/usr/bin/env bash
@@ -42,8 +41,7 @@ qemu:
     if {{is_test}}; then
         timeout --foreground 60s just kernel_binary={{kernel_binary}} qemu-test
     else
-        qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-{{file_name(kernel_binary)}}.img \
-            -no-shutdown -no-reboot
+        qemu-system-x86_64 -drive format=raw,file={{out_dir}}/boot-bios-{{file_name(kernel_binary)}}.img
     fi    
 
 runner binary:
