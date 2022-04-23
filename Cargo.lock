@@ -10,6 +10,7 @@ dependencies = [
  "conquer-once",
  "lazy_static",
  "noto-sans-mono-bitmap",
+ "pc-keyboard",
  "pic8259",
  "spin 0.9.3",
  "uart_16550",
@@ -63,6 +64,12 @@ name = "noto-sans-mono-bitmap"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643bee6617a18c64f5a72ef358a9426d3682dc768db7c320825d3d936e2232d4"
+
+[[package]]
+name = "pc-keyboard"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c6f2d937e3b8d63449b01401e2bae4041bc9dd1129c2e3e0d239407cf6635ac"
 
 [[package]]
 name = "pic8259"
