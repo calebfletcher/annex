@@ -33,6 +33,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 
     let acpi = annex::acpi::Acpi::init(rsdp_address, physical_memory_offset);
     let apic_addr = physical_memory_offset + acpi.local_apic_address().as_u64();
+    acpi.ioapic();
     timer::init(apic_addr);
 
     println!("kernel loaded");

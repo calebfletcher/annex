@@ -1,4 +1,11 @@
-use crate::{gdt, hlt_loop, print, println, serial_println, timer};
+use core::sync::atomic::{AtomicU8, Ordering};
+
+use crate::{
+    colour::{self},
+    gdt, hlt_loop, print, println,
+    screen::{self, TextColour},
+    serial_println, timer,
+};
 use lazy_static::lazy_static;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
@@ -21,6 +28,7 @@ pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
     Keyboard,
     APIC = 61,
+    IOAPICKB = 91,
 }
 
 lazy_static! {
@@ -43,6 +51,7 @@ lazy_static! {
         idt[InterruptIndex::Timer as usize].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard as usize].set_handler_fn(keyboard_interrupt_handler);
         idt[InterruptIndex::APIC as usize].set_handler_fn(apic_interrupt_handler);
+        idt[InterruptIndex::IOAPICKB as usize].set_handler_fn(ioapic_keyboard_interrupt_handler);
 
         idt
     };
@@ -56,8 +65,42 @@ fn general_handler(_stack_frame: InterruptStackFrame, index: u8, _error_code: Op
     println!("handle irq {}", index)
 }
 
+extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
+
+    lazy_static! {
+        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(
+            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
+        );
+    }
+
+    let mut keyboard = KEYBOARD.lock();
+    let mut port = Port::new(0x60);
+
+    let scancode: u8 = unsafe { port.read() };
+    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+        if let Some(key) = keyboard.process_keyevent(key_event) {
+            match key {
+                DecodedKey::Unicode(character) => print!("{}", character),
+                DecodedKey::RawKey(key) => print!("{:?}", key),
+            }
+        }
+    }
+}
+
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    print!(".");
+    static TOGGLE: AtomicU8 = AtomicU8::new(0);
+
+    let states = ['/', '-', '\\', '|', '/', '-', '\\', '|'];
+    let c = states[TOGGLE
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |a| Some((a + 1) % 8))
+        .unwrap() as usize];
+    screen::CONSOLE.try_get().unwrap().lock().write_at(
+        0,
+        700,
+        c,
+        TextColour::new(colour::RED, colour::BLACK),
+    );
     unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
 }
 

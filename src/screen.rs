@@ -197,6 +197,27 @@ impl<'a> Console<'a> {
         self.row = row;
         self.col = col;
     }
+
+    pub fn write_at(&mut self, base_row: usize, base_col: usize, c: char, colour: TextColour) {
+        if let Some(font) = noto_sans_mono_bitmap::get_bitmap(c, self.font_weight, self.font_size) {
+            for (row_i, &row) in font.bitmap().iter().enumerate() {
+                for (col_i, &pixel) in row.iter().enumerate() {
+                    let pixel_row = base_row + row_i;
+                    let pixel_col = base_col + col_i;
+
+                    self.screen.write_pixel(
+                        pixel_row,
+                        pixel_col,
+                        colour.lerp(pixel as f32 / 255.0).unwrap(),
+                    );
+                }
+            }
+            self.col += font.width();
+            if self.col >= self.width {
+                self.newline();
+            }
+        }
+    }
 }
 
 impl core::fmt::Write for Console<'_> {

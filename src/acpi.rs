@@ -1,9 +1,12 @@
 use core::ptr;
 
+use conquer_once::noblock::OnceCell;
+use x2apic::ioapic::IoApic;
 use x86_64::{PhysAddr, VirtAddr};
 
 pub struct Acpi {
     platform_info: acpi::PlatformInfo,
+    physical_memory_offset: VirtAddr,
 }
 
 impl Acpi {
@@ -17,7 +20,10 @@ impl Acpi {
 
         let platform_info = table.platform_info().unwrap();
 
-        Self { platform_info }
+        Self {
+            platform_info,
+            physical_memory_offset,
+        }
     }
 
     pub fn local_apic_address(&self) -> PhysAddr {
@@ -29,7 +35,32 @@ impl Acpi {
 
         PhysAddr::new(apic.local_apic_address)
     }
+
+    pub fn ioapic(&self) {
+        let ioapic = if let acpi::InterruptModel::Apic(apic) = &self.platform_info.interrupt_model {
+            apic.io_apics.get(0).unwrap()
+        } else {
+            unimplemented!("no apic found");
+        };
+
+        IOAPIC
+            .try_init_once(|| {
+                let mut ioapic = unsafe {
+                    x2apic::ioapic::IoApic::new(
+                        (self.physical_memory_offset + ioapic.address as u64).as_u64(),
+                    )
+                };
+                unsafe {
+                    ioapic.enable_irq(1);
+                    ioapic.init(90);
+                }
+                spin::Mutex::new(ioapic)
+            })
+            .unwrap();
+    }
 }
+
+pub static IOAPIC: OnceCell<spin::Mutex<IoApic>> = OnceCell::uninit();
 
 struct Handler {
     physical_memory_offset: VirtAddr,
