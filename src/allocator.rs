@@ -1,18 +1,16 @@
+#[cfg(feature = "allocator_bump")]
 pub mod bump;
+#[cfg(feature = "allocator_fixed_size")]
 pub mod fixed_size_block;
+#[cfg(feature = "allocator_linked_list")]
 pub mod linked_list;
 
-use linked_list_allocator::LockedHeap;
 use x86_64::{
     structures::paging::{
         mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
     },
     VirtAddr,
 };
-
-use bump::BumpAllocator;
-use fixed_size_block::FixedSizeBlockAllocator;
-use linked_list::LinkedListAllocator;
 
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
@@ -44,17 +42,23 @@ pub fn init_heap(
     Ok(())
 }
 
-//#[global_allocator]
-//static ALLOCATOR: LockedHeap = LockedHeap::empty();
-
-// #[global_allocator]
-// static ALLOCATOR: Locked<BumpAllocator> = Locked::new(BumpAllocator::new());
-
-// #[global_allocator]
-// static ALLOCATOR: Locked<LinkedListAllocator> = Locked::new(LinkedListAllocator::new());
-
+#[cfg(feature = "allocator_linked_list_external")]
 #[global_allocator]
-static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
+static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
+
+#[cfg(feature = "allocator_bump")]
+#[global_allocator]
+static ALLOCATOR: Locked<bump::BumpAllocator> = Locked::new(bump::BumpAllocator::new());
+
+#[cfg(feature = "allocator_linked_list")]
+#[global_allocator]
+static ALLOCATOR: Locked<linked_list::LinkedListAllocator> =
+    Locked::new(linked_list::LinkedListAllocator::new());
+
+#[cfg(feature = "allocator_fixed_size")]
+#[global_allocator]
+static ALLOCATOR: Locked<fixed_size_block::FixedSizeBlockAllocator> =
+    Locked::new(fixed_size_block::FixedSizeBlockAllocator::new());
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
@@ -80,6 +84,7 @@ impl<A> Locked<A> {
 /// Align the given address `addr` upwards to alignment `align`.
 ///
 /// Requires that `align` is a power of two.
+#[allow(dead_code)]
 fn align_up(addr: usize, align: usize) -> usize {
     (addr + align - 1) & !(align - 1)
 }
