@@ -106,6 +106,10 @@ extern "x86-interrupt" fn page_fault_handler(
     code: PageFaultErrorCode,
 ) {
     serial_println!("EXCEPTION: PAGE FAULT ({:?})\n{:#?}", code, stack_frame);
+    serial_println!(
+        "Tried to access: {:?}",
+        x86_64::registers::control::Cr2::read()
+    );
     panic!();
 }
 
