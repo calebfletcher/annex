@@ -18,22 +18,8 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-    for i in 0..10 {
-        println!("row {}", i);
-        delay(10);
-    }
-
     println!("kernel loaded");
     annex::hlt_loop();
-}
-
-fn delay(factor: usize) {
-    let value = 0;
-    for _ in 0..factor * 1000000 {
-        unsafe {
-            core::ptr::read_volatile(&value);
-        }
-    }
 }
 
 #[test_case]
