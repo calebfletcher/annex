@@ -1,4 +1,4 @@
-use crate::{gdt, hlt_loop, print, println, serial_println};
+use crate::{gdt, hlt_loop, print, println, serial_println, timer};
 use lazy_static::lazy_static;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
@@ -20,11 +20,15 @@ pub static PICS: spin::Mutex<ChainedPics> =
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
     Keyboard,
+    APIC = 61,
 }
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
+
+        x86_64::set_general_handler!(&mut idt, general_handler);
+
         idt.breakpoint.set_handler_fn(breakpoint_handler);
         idt.general_protection_fault
             .set_handler_fn(general_protection_fault_handler);
@@ -38,6 +42,7 @@ lazy_static! {
         }
         idt[InterruptIndex::Timer as usize].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard as usize].set_handler_fn(keyboard_interrupt_handler);
+        idt[InterruptIndex::APIC as usize].set_handler_fn(apic_interrupt_handler);
 
         idt
     };
@@ -45,6 +50,15 @@ lazy_static! {
 
 pub fn init_idt() {
     IDT.load();
+}
+
+fn general_handler(_stack_frame: InterruptStackFrame, index: u8, _error_code: Option<u64>) {
+    println!("handle irq {}", index)
+}
+
+extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    print!(".");
+    unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {

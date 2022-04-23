@@ -32,6 +32,9 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     let acpi = annex::acpi::Acpi::init(rsdp_address, physical_memory_offset);
+    let apic_addr = physical_memory_offset + acpi.local_apic_address().as_u64();
+    timer::init(apic_addr);
+
     println!("kernel loaded");
     annex::hlt_loop();
 }

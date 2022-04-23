@@ -1,17 +1,31 @@
-use crate::acpi;
+use conquer_once::noblock::OnceCell;
+use x2apic::lapic::LocalApic;
+use x86_64::VirtAddr;
 
 pub fn detect() -> bool {
     let cpu_features = unsafe { core::arch::x86_64::__cpuid(1) };
     cpu_features.edx >> 9 & 1 == 1
 }
 
-pub fn get_apic_address(physical_memory_offset: *const u8, rsdp_offset: usize) -> *const u8 {
-    let rsdp_addr = unsafe { physical_memory_offset.add(rsdp_offset) };
+pub static APIC: OnceCell<spin::Mutex<LocalApic>> = OnceCell::uninit();
 
-    let rsdp = acpi::rsdp::init(rsdp_addr);
-    let rsdt = acpi::rsdt::init(rsdp.rsdt_address(physical_memory_offset));
-    let madt = rsdt
-        .find_table::<acpi::madt::Madt>(physical_memory_offset)
-        .unwrap();
-    madt.local_apic_address(physical_memory_offset)
+pub fn init(addr: VirtAddr) {
+    APIC.try_init_once(|| {
+        let mut lapic = x2apic::lapic::LocalApicBuilder::new()
+            .timer_vector(61)
+            .error_vector(62)
+            .spurious_vector(63)
+            .set_xapic_base(addr.as_u64())
+            .timer_divide(x2apic::lapic::TimerDivide::Div16)
+            .timer_mode(x2apic::lapic::TimerMode::Periodic)
+            .timer_initial(10_000_000)
+            .build()
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        unsafe {
+            lapic.enable();
+        }
+        spin::Mutex::new(lapic)
+    })
+    .unwrap();
 }

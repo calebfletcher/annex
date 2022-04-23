@@ -42,7 +42,10 @@ pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
 
     gdt::init();
     interrupts::init_idt();
+
+    // Disable PIC interrupts since we're using the APIC
     unsafe { interrupts::PICS.lock().initialize() };
+    unsafe { interrupts::PICS.lock().write_masks(0xFF, 0xFF) };
 
     x86_64::instructions::interrupts::enable();
 }

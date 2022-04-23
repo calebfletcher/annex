@@ -23,6 +23,7 @@ spin = { version = "0.9.3", features = [
     "spin_mutex",
 ], default-features = false }
 uart_16550 = "0.2.18"
+x2apic = "0.4.0"
 x86_64 = "0.14.9"
 
 [features]
