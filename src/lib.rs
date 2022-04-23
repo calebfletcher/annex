@@ -3,6 +3,7 @@
 #![feature(custom_test_frameworks)]
 #![feature(abi_x86_interrupt)]
 #![feature(type_alias_impl_trait)]
+#![feature(alloc_error_handler)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![test_runner(crate::test::test_runner)]
@@ -11,6 +12,8 @@
 // in the kernel
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+pub mod acpi;
+pub mod allocator;
 pub mod colour;
 pub mod gdt;
 pub mod interrupts;
@@ -18,10 +21,11 @@ pub mod memory;
 pub mod screen;
 pub mod serial;
 
-pub mod acpi;
 #[allow(unused_imports)]
 pub mod test;
 pub mod timer;
+
+extern crate alloc;
 
 pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
     let frame_buffer = framebuffer;
@@ -60,7 +64,7 @@ pub fn hlt_loop() -> ! {
 bootloader::entry_point!(entry_point);
 #[cfg(test)]
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
-    init(info);
+    init(info.framebuffer.as_mut().unwrap());
     test_main();
     hlt_loop();
 }
