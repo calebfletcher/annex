@@ -3,6 +3,7 @@
 #![feature(custom_test_frameworks)]
 #![feature(abi_x86_interrupt)]
 #![feature(type_alias_impl_trait)]
+#![feature(const_mut_refs)]
 #![feature(alloc_error_handler)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
