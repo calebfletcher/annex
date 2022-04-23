@@ -6,10 +6,10 @@ cargo_release_flag := if build == "release" { "--release" } else { "" }
 mode_flags_qemu := if mode == "uefi" { "-bios " + project_dir + "/OVMF-pure-efi.fd" } else { "" }
 
 bootloader_dir := parent_directory(`cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "bootloader") | .manifest_path'`)
-target_dir := justfile_directory() + "/target"
-kernel_binary := target_dir + "/x86_64-annex/" + build + "/annex"
+target_dir := join(justfile_directory(), "target")
+kernel_binary := join(target_dir, "x86_64-annex", build, "annex")
 out_dir := parent_directory(kernel_binary)
-disk_image := out_dir + "/boot-" + mode + "-" + file_name(kernel_binary) + ".img"
+disk_image := out_dir + "boot-" + mode + "-" + file_name(kernel_binary) + ".img"
 
 is_test := if file_name(parent_directory(kernel_binary)) == "deps" { "true" } else { "false" }
 
