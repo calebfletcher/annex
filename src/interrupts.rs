@@ -1,10 +1,11 @@
-use crate::{gdt, print, serial_println};
+use crate::{gdt, hlt_loop, print, println, serial_println};
 use lazy_static::lazy_static;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
 use spin::{self, Mutex};
 use x86_64::{
     instructions::port::Port,
+    registers::control::Cr2,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
 };
 
@@ -103,14 +104,13 @@ extern "x86-interrupt" fn general_protection_fault_handler(
 
 extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
-    code: PageFaultErrorCode,
+    error_code: PageFaultErrorCode,
 ) {
-    serial_println!("EXCEPTION: PAGE FAULT ({:?})\n{:#?}", code, stack_frame);
-    serial_println!(
-        "Tried to access: {:?}",
-        x86_64::registers::control::Cr2::read()
-    );
-    panic!();
+    println!("EXCEPTION: PAGE FAULT");
+    println!("Accessed Address: {:?}", Cr2::read());
+    println!("Error Code: {:?}", error_code);
+    println!("{:#?}", stack_frame);
+    hlt_loop();
 }
 
 extern "x86-interrupt" fn double_fault_handler(

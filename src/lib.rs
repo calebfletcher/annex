@@ -2,6 +2,7 @@
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]
 #![feature(abi_x86_interrupt)]
+#![feature(type_alias_impl_trait)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 #![test_runner(crate::test::test_runner)]
@@ -13,6 +14,7 @@
 pub mod colour;
 pub mod gdt;
 pub mod interrupts;
+pub mod memory;
 pub mod screen;
 pub mod serial;
 
