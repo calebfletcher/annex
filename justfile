@@ -1,7 +1,7 @@
 project_dir := justfile_directory()
 
 build := "release"
-mode := "bios"
+mode := "uefi"
 cargo_release_flag := if build == "release" { "--release" } else { "" }
 mode_flags_qemu := if mode == "uefi" { "-bios " + project_dir + "/OVMF-pure-efi.fd" } else { "" }
 
@@ -9,11 +9,11 @@ bootloader_dir := parent_directory(`cargo metadata --format-version 1 | jq -r '.
 target_dir := join(justfile_directory(), "target")
 kernel_binary := join(target_dir, "x86_64-annex", build, "annex")
 out_dir := parent_directory(kernel_binary)
-disk_image := out_dir + "boot-" + mode + "-" + file_name(kernel_binary) + ".img"
+disk_image := out_dir + "/boot-" + mode + "-" + file_name(kernel_binary) + ".img"
 
 is_test := if file_name(parent_directory(kernel_binary)) == "deps" { "true" } else { "false" }
 
-qemu_args := "-drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown " + mode_flags_qemu
+qemu_args := "-drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown -s " + mode_flags_qemu
 
 _default:
     just --list
@@ -49,6 +49,13 @@ qemu:
     else
         qemu-system-x86_64 {{qemu_args}}
     fi    
+
+# Run QEMU but wait for debugger
+qemu-dbg:
+    qemu-system-x86_64 {{qemu_args}} -S
+
+gdb:
+    rust-gdb {{kernel_binary}} -ex "target remote :1234" -ex "b entry_point" -ex "c"
 
 runner binary:
     just kernel_binary={{absolute_path(binary)}} build-image

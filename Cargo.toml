@@ -36,6 +36,9 @@ default = ["allocator_fixed_size"]
 minimum-framebuffer-width = 800
 map-physical-memory = true
 
+[profile.release]
+debug = true
+
 
 [[test]]
 name = "should_panic"
