@@ -2,8 +2,13 @@
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]
 #![feature(abi_x86_interrupt)]
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
 #![test_runner(crate::test::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+// This is bad, but in the early stages it is going to be used everywhere
+// in the kernel
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 pub mod colour;
 pub mod gdt;
@@ -11,11 +16,12 @@ pub mod interrupts;
 pub mod screen;
 pub mod serial;
 
+pub mod acpi;
 #[allow(unused_imports)]
 pub mod test;
 
-pub fn init(info: &'static mut bootloader::BootInfo) {
-    let frame_buffer = info.framebuffer.as_mut().unwrap();
+pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
+    let frame_buffer = framebuffer;
     let buffer_info = frame_buffer.info();
     let buffer = frame_buffer.buffer_mut();
 

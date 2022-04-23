@@ -11,13 +11,21 @@ mod panic;
 
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
-    annex::init(info);
+    let framebuffer = info.framebuffer.as_mut().unwrap();
+
+    annex::init(framebuffer);
     println!("hello");
 
     // Run the tests if we're running under the test harness
     #[cfg(test)]
     test_main();
 
+    let physical_memory_offset = info.physical_memory_offset.into_option().unwrap() as *const u8;
+    let rsdp_addr =
+        unsafe { physical_memory_offset.add(info.rsdp_addr.into_option().unwrap() as usize) };
+
+    let rsdp = annex::acpi::rsdp::init(rsdp_addr);
+    let rsdt = annex::acpi::rsdt::init(rsdp.rsdt_address(physical_memory_offset));
     println!("kernel loaded");
     annex::hlt_loop();
 }

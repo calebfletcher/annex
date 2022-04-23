@@ -106,6 +106,7 @@ extern "x86-interrupt" fn page_fault_handler(
     code: PageFaultErrorCode,
 ) {
     serial_println!("EXCEPTION: PAGE FAULT ({:?})\n{:#?}", code, stack_frame);
+    panic!();
 }
 
 extern "x86-interrupt" fn double_fault_handler(

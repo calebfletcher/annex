@@ -26,6 +26,7 @@ x86_64 = "0.14.9"
 [package.metadata.bootloader]
 #minimum-framebuffer-height = 500
 minimum-framebuffer-width = 800
+map-physical-memory = true
 
 
 [[test]]
