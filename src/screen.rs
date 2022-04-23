@@ -4,30 +4,24 @@ use crate::colour::{self, Colour};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextColour {
-    foreground: Option<Colour>,
-    background: Option<Colour>,
+    foreground: Colour,
+    background: Colour,
 }
 
 impl TextColour {
     pub const fn new(foreground: Colour, background: Colour) -> Self {
         Self {
-            foreground: Some(foreground),
-            background: Some(background),
+            foreground,
+            background,
         }
     }
-    #[allow(dead_code)]
-    pub const fn from_foreground(foreground: Colour) -> Self {
-        Self {
-            foreground: Some(foreground),
-            background: None,
-        }
-    }
-    #[allow(dead_code)]
-    pub const fn from_background(background: Colour) -> Self {
-        Self {
-            foreground: None,
-            background: Some(background),
-        }
+    pub fn lerp(&self, amount: f32) -> Option<Colour> {
+        let (fg, bg) = (self.foreground, self.background);
+        Some(Colour {
+            r: (bg.r as f32 + ((fg.r - bg.r) as f32 * amount)) as u8,
+            g: (bg.g as f32 + ((fg.g - bg.g) as f32 * amount)) as u8,
+            b: (bg.b as f32 + ((fg.b - bg.b) as f32 * amount)) as u8,
+        })
     }
 }
 
@@ -145,17 +139,12 @@ impl<'a> Console<'a> {
                             for (col_i, &pixel) in row.iter().enumerate() {
                                 let pixel_row = self.row + row_i;
                                 let pixel_col = self.col + col_i;
-                                if pixel > 40 {
-                                    // Foreground
-                                    if let Some(colour) = colour.foreground {
-                                        self.screen.write_pixel(pixel_row, pixel_col, colour);
-                                    }
-                                } else {
-                                    // Background
-                                    if let Some(colour) = colour.background {
-                                        self.screen.write_pixel(pixel_row, pixel_col, colour);
-                                    }
-                                }
+
+                                self.screen.write_pixel(
+                                    pixel_row,
+                                    pixel_col,
+                                    colour.lerp(pixel as f32 / 255.0).unwrap(),
+                                );
                             }
                         }
                         self.col += font.width();
