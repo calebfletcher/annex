@@ -2,7 +2,7 @@
 #[repr(C, packed)]
 pub struct Rsdt {
     signature: [u8; 4],
-    length: u32,
+    pub length: u32,
     revision: u8,
     checksum: u8,
     oem_id: [u8; 6],

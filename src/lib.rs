@@ -19,6 +19,7 @@ pub mod serial;
 pub mod acpi;
 #[allow(unused_imports)]
 pub mod test;
+pub mod timer;
 
 pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
     let frame_buffer = framebuffer;
