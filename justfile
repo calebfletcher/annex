@@ -1,7 +1,7 @@
 project_dir := justfile_directory()
 
 build := "release"
-mode := "uefi"
+mode := "bios"
 cargo_release_flag := if build == "release" { "--release" } else { "" }
 mode_flags_qemu := if mode == "uefi" { "-bios " + project_dir + "/OVMF-pure-efi.fd" } else { "" }
 

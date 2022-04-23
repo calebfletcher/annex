@@ -7,8 +7,8 @@
 
 extern crate alloc;
 
-use annex::{allocator, colour, memory, println, screen};
-use x86_64::VirtAddr;
+use annex::{allocator, colour, memory, println, screen, timer};
+use x86_64::{PhysAddr, VirtAddr};
 
 mod panic;
 
@@ -23,15 +23,15 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-    // let physical_memory_offset = info.physical_memory_offset.into_option().unwrap() as *const u8;
-    // let rsdp_offset = info.rsdp_addr.into_option().unwrap() as usize;
-    // annex::timer::get_apic_address(physical_memory_offset, rsdp_offset);
+    let physical_memory_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
+    let rsdp_address = PhysAddr::new(info.rsdp_addr.into_option().unwrap());
 
     let phys_mem_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(&info.memory_regions) };
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
+    let acpi = annex::acpi::Acpi::init(rsdp_address, physical_memory_offset);
     println!("kernel loaded");
     annex::hlt_loop();
 }
