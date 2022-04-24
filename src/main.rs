@@ -9,7 +9,7 @@ extern crate alloc;
 
 use annex::{
     allocator, colour, memory, println, screen,
-    task::{executor::Executor, Task},
+    task::{self, executor::Executor, Task},
     timer,
 };
 use x86_64::{PhysAddr, VirtAddr};
@@ -21,7 +21,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let framebuffer = info.framebuffer.as_mut().unwrap();
 
     annex::init(framebuffer);
-    println!("hello");
+    println!("starting kernel");
 
     // Run the tests if we're running under the test harness
     #[cfg(test)]
@@ -39,9 +39,11 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let apic_addr = physical_memory_offset + acpi.local_apic_address().as_u64();
     acpi.ioapic();
     timer::init(apic_addr);
+    task::keyboard::init();
 
     let mut executor = Executor::new();
-    executor.spawn(Task::new(annex::task::keyboard::print_keypresses()));
+    executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
+    executor.spawn(Task::new(annex::user::line_edit::run()));
     executor.run();
 }
 

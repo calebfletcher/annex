@@ -46,6 +46,7 @@ impl Executor {
                 .entry(task_id)
                 .or_insert_with(|| TaskWaker::new(task_id, task_queue.clone()));
             let mut context = Context::from_waker(waker);
+
             match task.poll(&mut context) {
                 Poll::Ready(()) => {
                     // task done -> remove it and its cached waker

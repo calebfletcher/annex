@@ -23,6 +23,7 @@ pub mod memory;
 pub mod screen;
 pub mod serial;
 pub mod task;
+pub mod user;
 
 #[allow(unused_imports)]
 pub mod test;
