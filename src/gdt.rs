@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use x86_64::instructions::tables::load_tss;
-use x86_64::registers::segmentation::{Segment, CS, DS, ES, SS};
+use x86_64::registers::segmentation::{Segment, CS, SS};
 use x86_64::structures::gdt::SegmentSelector;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable};
 use x86_64::structures::tss::TaskStateSegment;

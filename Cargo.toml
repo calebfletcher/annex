@@ -9,6 +9,8 @@ edition = "2021"
 acpi = "4.1.0"
 bootloader = "0.10.12"
 conquer-once = { version = "0.3.2", default-features = false }
+crossbeam = { version = "0.8.1", features = ["alloc"], default-features = false }
+futures-util = { version = "0.3.21", features = ["alloc"], default-features = false }
 lazy_static = { version = "1.4.0", features = [
     "spin_no_std",
 ], default-features = false }

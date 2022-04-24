@@ -12,6 +12,7 @@
 // This is bad, but in the early stages it is going to be used everywhere
 // in the kernel
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::new_without_default)]
 
 pub mod acpi;
 pub mod allocator;
@@ -21,6 +22,7 @@ pub mod interrupts;
 pub mod memory;
 pub mod screen;
 pub mod serial;
+pub mod task;
 
 #[allow(unused_imports)]
 pub mod test;

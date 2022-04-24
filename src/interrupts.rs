@@ -2,14 +2,13 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use crate::{
     colour::{self},
-    gdt, hlt_loop, print, println,
+    gdt, hlt_loop, println,
     screen::{self, TextColour},
     serial_println, timer,
 };
 use lazy_static::lazy_static;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
-use spin::{self, Mutex};
+use spin;
 use x86_64::{
     instructions::port::Port,
     registers::control::Cr2,
@@ -25,8 +24,6 @@ pub static PICS: spin::Mutex<ChainedPics> =
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
-    Timer = PIC_1_OFFSET,
-    Keyboard,
     APIC = 61,
     IOAPICKB = 91,
 }
@@ -48,8 +45,6 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[InterruptIndex::Timer as usize].set_handler_fn(timer_interrupt_handler);
-        idt[InterruptIndex::Keyboard as usize].set_handler_fn(keyboard_interrupt_handler);
         idt[InterruptIndex::APIC as usize].set_handler_fn(apic_interrupt_handler);
         idt[InterruptIndex::IOAPICKB as usize].set_handler_fn(ioapic_keyboard_interrupt_handler);
 
@@ -66,26 +61,11 @@ fn general_handler(_stack_frame: InterruptStackFrame, index: u8, _error_code: Op
 }
 
 extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
-
-    lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(
-            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
-        );
-    }
-
-    let mut keyboard = KEYBOARD.lock();
     let mut port = Port::new(0x60);
-
     let scancode: u8 = unsafe { port.read() };
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
-            }
-        }
-    }
+    crate::task::keyboard::add_scancode(scancode);
+
+    unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
 }
 
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -102,38 +82,6 @@ extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFra
         TextColour::new(colour::RED, colour::BLACK),
     );
     unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
-}
-
-extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Timer as u8)
-    }
-}
-
-extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(
-            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
-        );
-    }
-
-    let mut keyboard = KEYBOARD.lock();
-    let mut port = Port::new(0x60);
-
-    let scancode: u8 = unsafe { port.read() };
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
-            }
-        }
-    }
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard as u8)
-    }
 }
 
 extern "x86-interrupt" fn invalid_tss_handler(stack_frame: InterruptStackFrame, code: u64) {
