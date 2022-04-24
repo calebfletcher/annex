@@ -12,10 +12,7 @@ pub fn init() {
     GDT.0.load();
     unsafe {
         CS::set_reg(GDT.1.code_selector);
-        CS::set_reg(GDT.1.code_selector);
         SS::set_reg(GDT.1.data_selector);
-        DS::set_reg(GDT.1.data_selector);
-        ES::set_reg(GDT.1.data_selector);
         load_tss(GDT.1.tss_selector);
     }
 }

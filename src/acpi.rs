@@ -51,8 +51,8 @@ impl Acpi {
                     )
                 };
                 unsafe {
-                    ioapic.enable_irq(1);
                     ioapic.init(90);
+                    ioapic.enable_irq(1);
                 }
                 spin::Mutex::new(ioapic)
             })
