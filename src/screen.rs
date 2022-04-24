@@ -269,6 +269,14 @@ impl vte::Perform for TextConsole<'_> {
             'D' => {
                 self.move_cursor(Direction::Left, 1);
             }
+            'J' => {
+                if let Some(mode) = params.iter().next() {
+                    if mode.get(0) == Some(&2) {
+                        self.clear();
+                        self.goto(0, 0);
+                    }
+                }
+            }
             _ => {
                 serial_println!("csi dispatch {} {:?} {:?}", action, params, intermediates);
             }
