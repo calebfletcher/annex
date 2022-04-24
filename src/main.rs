@@ -8,8 +8,8 @@
 extern crate alloc;
 
 use annex::{
-    allocator, colour, hlt_loop, memory, println, screen,
-    task::{simple_executor::SimpleExecutor, Task},
+    allocator, colour, memory, println, screen,
+    task::{executor::Executor, Task},
     timer,
 };
 use x86_64::{PhysAddr, VirtAddr};
@@ -40,13 +40,10 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     acpi.ioapic();
     timer::init(apic_addr);
 
-    let mut executor = SimpleExecutor::new();
+    let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
     executor.spawn(Task::new(annex::task::keyboard::print_keypresses()));
     executor.run();
-
-    println!("It did not crash!");
-    hlt_loop()
 }
 
 async fn async_number() -> u32 {
