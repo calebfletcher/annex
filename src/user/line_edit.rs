@@ -4,7 +4,7 @@ use alloc::string::String;
 use futures_util::{Stream, StreamExt};
 use pc_keyboard::DecodedKey;
 
-use crate::{print, println, task::keyboard};
+use crate::{print, println};
 
 pub struct Editor<S>
 where
@@ -65,15 +65,5 @@ impl<S: Stream<Item = DecodedKey> + marker::Unpin> Editor<S> {
 
         // Take the current line, and leave a new String instance in its place
         mem::take(&mut self.current_line)
-    }
-}
-
-pub async fn run() {
-    let stream = keyboard::KeyStream::new();
-    let mut editor = Editor::new(stream);
-
-    loop {
-        let line = editor.prompt("> ").await;
-        println!("got line: {line}");
     }
 }
