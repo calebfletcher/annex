@@ -41,18 +41,8 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     timer::init(apic_addr);
 
     let mut executor = Executor::new();
-    executor.spawn(Task::new(example_task()));
     executor.spawn(Task::new(annex::task::keyboard::print_keypresses()));
     executor.run();
-}
-
-async fn async_number() -> u32 {
-    42
-}
-
-async fn example_task() {
-    let number = async_number().await;
-    println!("async number: {}", number);
 }
 
 #[test_case]
