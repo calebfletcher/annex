@@ -212,10 +212,6 @@ impl<'a> Console<'a> {
                     );
                 }
             }
-            self.col += font.width();
-            if self.col >= self.width {
-                self.newline();
-            }
         }
     }
 }
