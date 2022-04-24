@@ -1,11 +1,4 @@
-use core::sync::atomic::{AtomicU8, Ordering};
-
-use crate::{
-    colour::{self},
-    gdt, hlt_loop, println,
-    screen::{self, TextColour},
-    serial_println, timer,
-};
+use crate::{gdt, hlt_loop, println, serial_println, timer};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
@@ -69,18 +62,18 @@ extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: Interr
 }
 
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    static TOGGLE: AtomicU8 = AtomicU8::new(0);
+    // static TOGGLE: AtomicU8 = AtomicU8::new(0);
 
-    let states = ['/', '-', '\\', '|', '/', '-', '\\', '|'];
-    let c = states[TOGGLE
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |a| Some((a + 1) % 8))
-        .unwrap() as usize];
-    screen::CONSOLE.try_get().unwrap().lock().write_at(
-        0,
-        700,
-        c,
-        TextColour::new(colour::RED, colour::BLACK),
-    );
+    // let states = ['/', '-', '\\', '|', '/', '-', '\\', '|'];
+    // let c = states[TOGGLE
+    //     .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |a| Some((a + 1) % 8))
+    //     .unwrap() as usize];
+    // screen::CONSOLE.try_get().unwrap().lock().write_at(
+    //     0,
+    //     700,
+    //     c,
+    //     TextColour::new(colour::RED, colour::BLACK),
+    // );
     unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
 }
 

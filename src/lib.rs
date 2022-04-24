@@ -41,7 +41,7 @@ pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
     screen.clear(colour::BLACK);
 
     // Initialise text console
-    init_console(screen);
+    init_terminal(screen);
 
     gdt::init();
     interrupts::init_idt();
@@ -53,10 +53,10 @@ pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
     x86_64::instructions::interrupts::enable();
 }
 
-fn init_console(screen: screen::Screen<'static>) {
-    let console = screen::Console::new(screen);
+fn init_terminal(screen: screen::Screen<'static>) {
+    let console = screen::Terminal::new(screen);
 
-    screen::CONSOLE
+    screen::TERMINAL
         .try_init_once(move || spin::mutex::SpinMutex::new(console))
         .unwrap();
 }

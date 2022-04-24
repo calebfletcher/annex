@@ -40,14 +40,18 @@ impl<S: Stream<Item = DecodedKey> + marker::Unpin> Editor<S> {
             match key {
                 ' '..='~' => {
                     self.current_line.push(key);
+                    print!("{}", key);
                 }
                 '\n' => {
                     // Don't include final newline
+                    print!("{}", key);
                     break;
                 }
                 '\x08' => {
                     // Backspace
-                    self.current_line.pop();
+                    if self.current_line.pop().is_some() {
+                        print!("\x1b[D \x1b[D");
+                    }
                 }
                 '\x7F' => {
                     // Delete

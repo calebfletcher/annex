@@ -2,7 +2,7 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    use crate::{colour, screen};
+    use crate::screen;
     use core::fmt::Write;
 
     // If running in a debug build, force the kernel panic to be shown, regardless
@@ -10,17 +10,15 @@ fn panic(info: &PanicInfo) -> ! {
     // with the graphics system.
     #[cfg(debug_assertions)]
     unsafe {
-        let cnsl = screen::CONSOLE.get_unchecked();
+        let cnsl = screen::TERMINAL.get_unchecked();
         cnsl.force_unlock();
-        cnsl.lock().goto(0, 0);
     };
 
     // Try to print an error message if possible
-    if let Ok(cnsl) = screen::CONSOLE.try_get() {
+    if let Ok(cnsl) = screen::TERMINAL.try_get() {
         if let Some(mut cnsl) = cnsl.try_lock() {
-            let colour = screen::TextColour::new(colour::RED, colour::BLACK);
-            cnsl.write_colour("kernel panic :(\n", colour);
-            cnsl.write_colour("panicked at ", colour);
+            writeln!(cnsl, "kernel panic :(").unwrap();
+            write!(cnsl, "panicked at ").unwrap();
 
             if let Some(&message) = info.message() {
                 let _: Result<_, _> = write!(cnsl, "'{}', ", message);
@@ -32,7 +30,7 @@ fn panic(info: &PanicInfo) -> ! {
                 // Ignore error from write macro
                 let _: Result<_, _> = write!(cnsl, "{}", location);
             }
-            cnsl.write_colour("\n", colour);
+            writeln!(cnsl).unwrap();
         }
     }
 

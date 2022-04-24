@@ -1,6 +1,9 @@
 use x86_64::instructions::interrupts;
 
-use crate::colour::{self, Colour};
+use crate::{
+    colour::{self, Colour},
+    serial_println,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextColour {
@@ -94,7 +97,7 @@ fn set_pixel_slice(
     }
 }
 
-pub struct Console<'a> {
+pub struct TextConsole<'a> {
     screen: Screen<'a>,
     font_weight: noto_sans_mono_bitmap::FontWeight,
     font_size: noto_sans_mono_bitmap::BitmapHeight,
@@ -105,7 +108,7 @@ pub struct Console<'a> {
     col: usize,
 }
 
-impl<'a> Console<'a> {
+impl<'a> TextConsole<'a> {
     pub fn new(screen: Screen<'a>) -> Self {
         let width = screen.info.horizontal_resolution;
         let height = screen.info.vertical_resolution;
@@ -122,38 +125,6 @@ impl<'a> Console<'a> {
             height,
             row: 0,
             col: 0,
-        }
-    }
-
-    pub fn write_colour(&mut self, line: &str, colour: TextColour) {
-        for c in line.chars() {
-            match c {
-                '\n' => {
-                    self.newline();
-                }
-                _ => {
-                    if let Some(font) =
-                        noto_sans_mono_bitmap::get_bitmap(c, self.font_weight, self.font_size)
-                    {
-                        for (row_i, &row) in font.bitmap().iter().enumerate() {
-                            for (col_i, &pixel) in row.iter().enumerate() {
-                                let pixel_row = self.row + row_i;
-                                let pixel_col = self.col + col_i;
-
-                                self.screen.write_pixel(
-                                    pixel_row,
-                                    pixel_col,
-                                    colour.lerp(pixel as f32 / 255.0).unwrap(),
-                                );
-                            }
-                        }
-                        self.col += font.width();
-                        if self.col >= self.width {
-                            self.newline();
-                        }
-                    }
-                }
-            };
         }
     }
 
@@ -198,7 +169,38 @@ impl<'a> Console<'a> {
         self.col = col;
     }
 
-    pub fn write_at(&mut self, base_row: usize, base_col: usize, c: char, colour: TextColour) {
+    pub fn move_cursor(&mut self, dir: Direction, amount: usize) {
+        match dir {
+            Direction::Up => self.row = self.row.saturating_sub(amount * self.line_height),
+            Direction::Down => self.row = self.height.min(self.row + amount * self.line_height),
+            Direction::Left => self.col = self.col.saturating_sub(amount * 8),
+            Direction::Right => self.col = self.width.min(self.col + amount * 8),
+        };
+    }
+
+    pub fn write_char(&mut self, c: char) {
+        match c {
+            '\n' => {
+                self.newline();
+            }
+            _ => {
+                if let Some(width) = self.write_char_at(self.row, self.col, c, WHITE_ON_BLACK) {
+                    self.col += width;
+                    if self.col >= self.width {
+                        self.newline();
+                    }
+                }
+            }
+        };
+    }
+
+    pub fn write_char_at(
+        &mut self,
+        base_row: usize,
+        base_col: usize,
+        c: char,
+        colour: TextColour,
+    ) -> Option<usize> {
         if let Some(font) = noto_sans_mono_bitmap::get_bitmap(c, self.font_weight, self.font_size) {
             for (row_i, &row) in font.bitmap().iter().enumerate() {
                 for (col_i, &pixel) in row.iter().enumerate() {
@@ -212,18 +214,97 @@ impl<'a> Console<'a> {
                     );
                 }
             }
+            Some(font.width())
+        } else {
+            None
         }
     }
 }
 
-impl core::fmt::Write for Console<'_> {
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl vte::Perform for TextConsole<'_> {
+    fn print(&mut self, c: char) {
+        self.write_char(c);
+    }
+
+    fn execute(&mut self, byte: u8) {
+        match byte {
+            8 => serial_println!("backspace"),
+            9 => serial_println!("tab"),
+            10 => self.write_char('\n'),
+            _ => serial_println!("execute {}", byte),
+        }
+    }
+
+    fn hook(&mut self, _params: &vte::Params, _intermediates: &[u8], _ignore: bool, _action: char) {
+        serial_println!("hook");
+    }
+
+    fn put(&mut self, _byte: u8) {
+        serial_println!("put");
+    }
+
+    fn unhook(&mut self) {
+        serial_println!("unhook");
+    }
+
+    fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {
+        serial_println!("osc dispatch");
+    }
+
+    fn csi_dispatch(
+        &mut self,
+        params: &vte::Params,
+        intermediates: &[u8],
+        _ignore: bool,
+        action: char,
+    ) {
+        match action {
+            'D' => {
+                self.move_cursor(Direction::Left, 1);
+            }
+            _ => {
+                serial_println!("csi dispatch {} {:?} {:?}", action, params, intermediates);
+            }
+        }
+    }
+
+    fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {
+        serial_println!("esc dispatch");
+    }
+}
+
+pub struct Terminal<'a> {
+    console: TextConsole<'a>,
+    state_machine: vte::Parser,
+}
+
+impl<'a> Terminal<'a> {
+    pub fn new(screen: Screen<'a>) -> Self {
+        Self {
+            console: TextConsole::new(screen),
+            state_machine: vte::Parser::new(),
+        }
+    }
+}
+
+impl core::fmt::Write for Terminal<'_> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.write_colour(s, WHITE_ON_BLACK);
+        for &byte in s.as_bytes() {
+            self.state_machine.advance(&mut self.console, byte);
+        }
+
         Ok(())
     }
 }
 
-pub static CONSOLE: conquer_once::noblock::OnceCell<spin::mutex::SpinMutex<Console>> =
+pub static TERMINAL: conquer_once::noblock::OnceCell<spin::mutex::SpinMutex<Terminal>> =
     conquer_once::noblock::OnceCell::uninit();
 
 #[macro_export]
@@ -241,7 +322,7 @@ macro_rules! println {
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;
     interrupts::without_interrupts(|| {
-        CONSOLE.try_get().unwrap().lock().write_fmt(args).unwrap();
+        TERMINAL.try_get().unwrap().lock().write_fmt(args).unwrap();
     });
 }
 

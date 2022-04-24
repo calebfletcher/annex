@@ -8,7 +8,7 @@
 extern crate alloc;
 
 use annex::{
-    allocator, colour, memory, println, screen,
+    allocator, memory, println, screen,
     task::{self, executor::Executor, Task},
     timer,
 };
@@ -44,6 +44,8 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
     executor.spawn(Task::new(annex::user::line_edit::run()));
+
+    println!("loaded kernel");
     executor.run();
 }
 
