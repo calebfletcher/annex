@@ -1,7 +1,11 @@
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use bootloader::boot_info::{MemoryRegionKind, MemoryRegions};
 use x86_64::{
     registers::control::Cr3,
-    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
+    structures::paging::{
+        mapper, FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PhysFrame, Size4KiB,
+    },
     PhysAddr, VirtAddr,
 };
 
@@ -67,4 +71,56 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> {
         self.usable_frames.next()
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StackBounds {
+    start: VirtAddr,
+    end: VirtAddr,
+}
+
+impl StackBounds {
+    pub fn start(&self) -> VirtAddr {
+        self.start
+    }
+
+    pub fn end(&self) -> VirtAddr {
+        self.end
+    }
+}
+
+/// Reserve the specified amount of virtual memory. Returns the start page.
+fn reserve_stack_memory(size_in_pages: u64) -> Page {
+    static STACK_ALLOC_NEXT: AtomicU64 = AtomicU64::new(0x_5555_5555_0000);
+    let start_addr = VirtAddr::new(
+        STACK_ALLOC_NEXT.fetch_add(size_in_pages * Page::<Size4KiB>::SIZE, Ordering::Relaxed),
+    );
+    Page::from_start_address(start_addr).expect("`STACK_ALLOC_NEXT` not page aligned")
+}
+
+pub fn alloc_stack(
+    size_in_pages: u64,
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+) -> Result<StackBounds, mapper::MapToError<Size4KiB>> {
+    use x86_64::structures::paging::PageTableFlags as Flags;
+
+    let guard_page = reserve_stack_memory(size_in_pages + 1);
+    let stack_start = guard_page + 1;
+    let stack_end = stack_start + size_in_pages;
+
+    for page in Page::range(stack_start, stack_end) {
+        let frame = frame_allocator
+            .allocate_frame()
+            .ok_or(mapper::MapToError::FrameAllocationFailed)?;
+        let flags = Flags::PRESENT | Flags::WRITABLE | Flags::USER_ACCESSIBLE;
+        unsafe {
+            mapper.map_to(page, frame, flags, frame_allocator)?.flush();
+        }
+    }
+
+    Ok(StackBounds {
+        start: stack_start.start_address(),
+        end: stack_end.start_address(),
+    })
 }

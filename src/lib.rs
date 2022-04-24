@@ -4,6 +4,10 @@
 #![feature(abi_x86_interrupt)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_mut_refs)]
+#![feature(naked_functions)]
+#![feature(never_type)]
+#![feature(assert_matches)]
+#![feature(ptr_metadata)]
 #![feature(alloc_error_handler)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
@@ -22,6 +26,7 @@ pub mod memory;
 pub mod screen;
 pub mod serial;
 
+pub mod multitasking;
 #[allow(unused_imports)]
 pub mod test;
 pub mod timer;

@@ -36,8 +36,31 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     acpi.ioapic();
     timer::init(apic_addr);
 
-    println!("kernel loaded");
-    annex::hlt_loop();
+    let idle_thread = Thread::create(idle_thread, 2, &mut mapper, &mut frame_allocator).unwrap();
+    with_scheduler(|s| s.set_idle_thread(idle_thread));
+
+    for _ in 0..10 {
+        let thread = Thread::create(thread_entry, 2, &mut mapper, &mut frame_allocator).unwrap();
+        with_scheduler(|s| s.add_new_thread(thread));
+    }
+    let thread =
+        Thread::create_from_closure(|| thread_entry(), 2, &mut mapper, &mut frame_allocator)
+            .unwrap();
+    with_scheduler(|s| s.add_new_thread(thread));
+fn idle_thread() -> ! {
+    loop {
+        x86_64::instructions::hlt();
+        multitasking::yield_now();
+    }
+}
+
+fn thread_entry() -> ! {
+    let thread_id = with_scheduler(|s| s.current_thread_id()).as_u64();
+    for _ in 0..=thread_id {
+        print!("{}", thread_id);
+        x86_64::instructions::hlt();
+    }
+    multitasking::exit_thread();
 }
 
 #[test_case]
