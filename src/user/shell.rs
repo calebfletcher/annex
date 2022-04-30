@@ -1,12 +1,11 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-use crate::{print, println, task::keyboard};
+use crate::{cmos, print, println, task::keyboard};
 
 use super::line_edit;
 
 pub async fn run() {
-    let stream = keyboard::KeyStream::new();
-    let mut editor = line_edit::Editor::new(stream);
+    let mut editor = line_edit::Editor::new(keyboard::KeyStream::new());
 
     let mut history = Vec::new();
 
@@ -37,6 +36,15 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
         "history" => {
             println!("{}", history.join("\n"));
         }
+        "time" => {
+            println!(
+                "Current Time: {}",
+                cmos::RTC
+                    .try_get()
+                    .map(|rtc| rtc.time().to_rfc3339())
+                    .unwrap_or_else(|_| "unavailable".to_owned())
+            );
+        }
         _ => println!("unknown command: {}", cmd),
     }
 }
@@ -46,4 +54,5 @@ fn display_help() {
     println!("  help");
     println!("  clear");
     println!("  history");
+    println!("  time");
 }

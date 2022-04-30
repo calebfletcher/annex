@@ -25,6 +25,7 @@ pub mod serial;
 pub mod task;
 pub mod user;
 
+pub mod cmos;
 #[allow(unused_imports)]
 pub mod test;
 pub mod timer;

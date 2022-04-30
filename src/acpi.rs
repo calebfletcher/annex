@@ -1,28 +1,41 @@
 use core::ptr;
 
+use acpi::sdt::Signature;
 use conquer_once::noblock::OnceCell;
 use x2apic::ioapic::IoApic;
 use x86_64::{PhysAddr, VirtAddr};
 
-pub struct Acpi {
+use crate::println;
+
+pub struct Acpi<'a> {
     platform_info: acpi::PlatformInfo,
     physical_memory_offset: VirtAddr,
+    fadt: acpi::PhysicalMapping<&'a Handler, acpi::fadt::Fadt>,
 }
 
-impl Acpi {
-    pub fn init(rsdp_address: PhysAddr, physical_memory_offset: VirtAddr) -> Self {
-        let handler = Handler {
-            physical_memory_offset,
-        };
+impl<'a> Acpi<'a> {
+    pub fn init(
+        handler: &'a Handler,
+        rsdp_address: PhysAddr,
+        physical_memory_offset: VirtAddr,
+    ) -> Self {
         let table = unsafe {
-            acpi::AcpiTables::from_rsdp(&handler, rsdp_address.as_u64() as usize).unwrap()
+            acpi::AcpiTables::from_rsdp(handler, rsdp_address.as_u64() as usize).unwrap()
         };
 
+        for signature in table.sdts.keys() {
+            println!("found table {}", signature);
+        }
+
         let platform_info = table.platform_info().unwrap();
+
+        let fadt: acpi::PhysicalMapping<&Handler, acpi::fadt::Fadt> =
+            unsafe { table.get_sdt(Signature::FADT).unwrap().unwrap() };
 
         Self {
             platform_info,
             physical_memory_offset,
+            fadt,
         }
     }
 
@@ -58,12 +71,18 @@ impl Acpi {
             })
             .unwrap();
     }
+
+    /// Get a reference to the acpi's fadt.
+    #[must_use]
+    pub fn fadt(&self) -> &acpi::PhysicalMapping<&'a Handler, acpi::fadt::Fadt> {
+        &self.fadt
+    }
 }
 
 pub static IOAPIC: OnceCell<spin::Mutex<IoApic>> = OnceCell::uninit();
 
-struct Handler {
-    physical_memory_offset: VirtAddr,
+pub struct Handler {
+    pub physical_memory_offset: VirtAddr,
 }
 
 impl<'a> acpi::AcpiHandler for &Handler {

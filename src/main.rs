@@ -8,7 +8,7 @@
 extern crate alloc;
 
 use annex::{
-    allocator, memory, println, screen,
+    allocator, cmos, memory, println, screen,
     task::{self, executor::Executor, Task},
     timer,
 };
@@ -35,11 +35,17 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(&info.memory_regions) };
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    let acpi = annex::acpi::Acpi::init(rsdp_address, physical_memory_offset);
+    let handler = annex::acpi::Handler {
+        physical_memory_offset,
+    };
+    let acpi = annex::acpi::Acpi::init(&handler, rsdp_address, physical_memory_offset);
     let apic_addr = physical_memory_offset + acpi.local_apic_address().as_u64();
     acpi.ioapic();
     timer::init(apic_addr);
     task::keyboard::init();
+    cmos::RTC
+        .try_init_once(|| cmos::Rtc::new(acpi.fadt().century))
+        .unwrap();
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
