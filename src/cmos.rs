@@ -62,9 +62,9 @@ impl Rtc {
 
         let decode_hour = |hour| {
             if uses_24_hour {
-                hour
+                bcd_to_binary(hour)
             } else {
-                let masked_hour = (hour & 0x7F) % 12;
+                let masked_hour = bcd_to_binary(hour & 0x7F) % 12;
                 if (hour >> 7) == 1_u8 {
                     // PM
                     masked_hour + 12
