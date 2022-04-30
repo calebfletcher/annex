@@ -12,15 +12,18 @@ use annex::{
     task::{self, executor::Executor, Task},
     timer,
 };
+use log::info;
 use x86_64::{PhysAddr, VirtAddr};
 
 mod panic;
 
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
+    annex::log::init();
     let framebuffer = info.framebuffer.as_mut().unwrap();
 
     annex::init(framebuffer);
+    info!("starting kernel");
     println!("starting kernel");
 
     // Run the tests if we're running under the test harness
