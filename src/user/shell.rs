@@ -38,10 +38,13 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
         }
         "time" => {
             println!(
-                "Current Time: {}",
+                "Local Time: {}",
                 cmos::RTC
                     .try_get()
-                    .map(|rtc| rtc.time().to_rfc3339())
+                    .map(|rtc| rtc
+                        .time()
+                        .with_timezone(&chrono_tz::Australia::Melbourne)
+                        .to_rfc3339())
                     .unwrap_or_else(|_| "unavailable".to_owned())
             );
         }
