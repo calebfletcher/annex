@@ -13,7 +13,7 @@ disk_image := out_dir + "/boot-" + mode + "-" + file_name(kernel_binary) + ".img
 
 is_test := if file_name(parent_directory(kernel_binary)) == "deps" { "true" } else { "false" }
 
-qemu_args := "-drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown -s " + mode_flags_qemu
+qemu_args := "-machine q35 -drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown -s " + mode_flags_qemu
 
 _default:
     just --list
