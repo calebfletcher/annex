@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"rust-analyzer.checkOnSave.allTargets": false,
+		"rust-analyzer.cargo.unsetTest": [
+			"core",
+			"annex"
+		],
+		"rust-analyzer.cargo.features": [
+			"allocator_linked_list"
+		],
+		"rust-analyzer.cargo.noDefaultFeatures": true
+	}
+}
