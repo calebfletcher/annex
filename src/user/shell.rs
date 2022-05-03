@@ -48,6 +48,20 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
                     .unwrap_or_else(|_| "unavailable".to_owned())
             );
         }
+        "mmap" => {
+            // for region in kernel_memory_map.iter() {
+            //     let size_bytes = region.end - region.start;
+            //     let size = memory::format_bytes(size_bytes);
+            //     serial_println!(
+            //         "{:018p}-{:018p} ({}): {:?}",
+            //         region.start as *const u8,
+            //         region.end as *const u8,
+            //         size,
+            //         region.kind
+            //     );
+            // }
+            println!("unimplemented");
+        }
         _ => println!("unknown command: {}", cmd),
     }
 }
