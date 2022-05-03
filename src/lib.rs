@@ -33,6 +33,7 @@ pub mod user;
 
 pub mod apic;
 pub mod cmos;
+pub mod emulators;
 pub mod logger;
 pub mod pic;
 #[allow(unused_imports)]

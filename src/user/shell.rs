@@ -1,6 +1,6 @@
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-use crate::{cmos, print, println, task::keyboard};
+use crate::{cmos, emulators, print, println, task::keyboard};
 
 use super::line_edit;
 
@@ -61,6 +61,9 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
             //     );
             // }
             println!("unimplemented");
+        }
+        "q" | "quit" => {
+            emulators::exit_qemu(emulators::QemuExitCode::Success);
         }
         _ => println!("unknown command: {}", cmd),
     }
