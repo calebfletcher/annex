@@ -26,6 +26,7 @@ pub mod task;
 pub mod user;
 
 pub mod cmos;
+pub mod logger;
 pub mod log;
 #[allow(unused_imports)]
 pub mod test;
