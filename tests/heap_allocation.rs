@@ -9,19 +9,30 @@ extern crate alloc;
 use alloc::{boxed::Box, vec::Vec};
 use annex::{
     allocator::{self, HEAP_SIZE},
-    memory::{self, BootInfoFrameAllocator},
+    memory::{self},
 };
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use x86_64::VirtAddr;
+use x86_64::{PhysAddr, VirtAddr};
 
 entry_point!(main);
-fn main(boot_info: &'static mut BootInfo) -> ! {
-    annex::init(boot_info.framebuffer.as_mut().unwrap());
-    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
-    let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+fn main(info: &'static mut BootInfo) -> ! {
+    annex::logger::init();
+
+    let framebuffer = info.framebuffer.as_mut().unwrap();
+    let rsdp_address = PhysAddr::new(info.rsdp_addr.into_option().unwrap());
+    let physical_memory_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
+    let memory_regions = &info.memory_regions;
+    annex::init(
+        framebuffer,
+        rsdp_address,
+        physical_memory_offset,
+        memory_regions,
+    );
+
+    let mut mapper = unsafe { memory::init(physical_memory_offset) };
+    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(memory_regions) };
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialisation failed");
 
     test_main();
     loop {}

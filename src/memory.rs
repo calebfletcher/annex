@@ -1,7 +1,7 @@
 use alloc::{format, string::String};
 use bootloader::boot_info::{MemoryRegionKind, MemoryRegions};
 use conquer_once::noblock::OnceCell;
-use log::{debug, warn};
+use log::warn;
 use spin::Mutex;
 use x86_64::{
     registers::control::Cr3,
@@ -74,7 +74,9 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
         let frame = self.usable_frames.next();
 
         match frame {
-            Some(frame) => debug!("allocating frame at {:p}", frame.start_address()),
+            Some(_frame) => {
+                //debug!("allocating frame at {:p}", _frame.start_address())
+            }
             None => warn!("boot info frame allocator exhausted"),
         }
         frame
@@ -106,6 +108,7 @@ pub struct MemoryManager {
 }
 
 pub static MANAGER: OnceCell<Mutex<MemoryManager>> = OnceCell::uninit();
+pub static PHYSICAL_OFFSET: OnceCell<VirtAddr> = OnceCell::uninit();
 
 impl MemoryManager {
     pub fn init(
@@ -113,6 +116,9 @@ impl MemoryManager {
         page_table: OffsetPageTable<'static>,
         frame_allocator: BootInfoFrameAllocator,
     ) {
+        PHYSICAL_OFFSET
+            .try_init_once(|| physical_memory_offset)
+            .unwrap();
         MANAGER
             .try_init_once(|| {
                 Mutex::new(MemoryManager {
@@ -139,13 +145,47 @@ impl MemoryManager {
             }
         };
     }
-
-    pub fn translate_physical(&self, addr: PhysAddr) -> VirtAddr {
-        self.physical_memory_offset + addr.as_u64()
-    }
 }
 
 /// Gets a lock on the mutex of the memory manager
 pub fn manager<'a>() -> spin::MutexGuard<'a, MemoryManager> {
     MANAGER.try_get().unwrap().lock()
+}
+
+pub fn translate_physical(addr: impl AsU64) -> VirtAddr {
+    *PHYSICAL_OFFSET.try_get().unwrap() + addr.as_u64()
+}
+
+pub trait AsU64 {
+    fn as_u64(&self) -> u64;
+}
+
+impl AsU64 for u64 {
+    fn as_u64(&self) -> u64 {
+        *self
+    }
+}
+
+impl AsU64 for usize {
+    fn as_u64(&self) -> u64 {
+        (*self).try_into().unwrap()
+    }
+}
+
+impl AsU64 for VirtAddr {
+    fn as_u64(&self) -> u64 {
+        VirtAddr::as_u64(*self)
+    }
+}
+
+impl AsU64 for PhysAddr {
+    fn as_u64(&self) -> u64 {
+        PhysAddr::as_u64(*self)
+    }
+}
+
+impl AsU64 for u32 {
+    fn as_u64(&self) -> u64 {
+        *self as u64
+    }
 }

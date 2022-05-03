@@ -6,23 +6,18 @@ use aml::{AmlContext, AmlError, AmlName, AmlValue};
 use conquer_once::noblock::OnceCell;
 use log::{debug, error, warn};
 use x2apic::ioapic::IoApic;
-use x86_64::{instructions::port::Port, PhysAddr, VirtAddr};
+use x86_64::{instructions::port::Port, PhysAddr};
 
-use crate::{dbg, println};
+use crate::{dbg, memory, println};
 
 pub struct Acpi<'a> {
     platform_info: acpi::PlatformInfo,
-    physical_memory_offset: VirtAddr,
     fadt: acpi::PhysicalMapping<&'a Handler, acpi::fadt::Fadt>,
     context: AmlContext,
 }
 
 impl<'a> Acpi<'a> {
-    pub fn init(
-        handler: &'a Handler,
-        rsdp_address: PhysAddr,
-        physical_memory_offset: VirtAddr,
-    ) -> Self {
+    pub fn init(handler: &'a Handler, rsdp_address: PhysAddr) -> Self {
         debug!("decoding acpi tables");
         let table = unsafe {
             acpi::AcpiTables::from_rsdp(handler, rsdp_address.as_u64() as usize).unwrap()
@@ -33,11 +28,11 @@ impl<'a> Acpi<'a> {
         let dsdt = table.dsdt.as_ref().unwrap();
         let dsdt: &[u8] = unsafe {
             slice::from_raw_parts(
-                (physical_memory_offset + dsdt.address).as_ptr(),
+                memory::translate_physical(dsdt.address).as_ptr(),
                 dsdt.length as usize,
             )
         };
-        let context = load_aml(physical_memory_offset, dsdt, pci_regions);
+        let context = load_aml(dsdt, pci_regions);
 
         let platform_info = table.platform_info().unwrap();
         debug!(
@@ -55,7 +50,6 @@ impl<'a> Acpi<'a> {
 
         Self {
             platform_info,
-            physical_memory_offset,
             fadt,
             context,
         }
@@ -85,9 +79,7 @@ impl<'a> Acpi<'a> {
         IOAPIC
             .try_init_once(|| {
                 let mut ioapic = unsafe {
-                    x2apic::ioapic::IoApic::new(
-                        (self.physical_memory_offset + ioapic.address as u64).as_u64(),
-                    )
+                    x2apic::ioapic::IoApic::new(memory::translate_physical(ioapic.address).as_u64())
                 };
                 unsafe {
                     ioapic.init(90);
@@ -128,7 +120,7 @@ impl<'a> Acpi<'a> {
         }
 
         let pm1a_cnt = self.fadt.pm1a_control_block().unwrap();
-        let pm1a_cnt = self.physical_memory_offset + pm1a_cnt.address;
+        let pm1a_cnt = memory::translate_physical(pm1a_cnt.address);
         let current_value: u16 = unsafe { *pm1a_cnt.as_ptr() };
         println!("value: {:b}", current_value,);
         unsafe {
@@ -139,9 +131,7 @@ impl<'a> Acpi<'a> {
 
 pub static IOAPIC: OnceCell<spin::Mutex<IoApic>> = OnceCell::uninit();
 
-pub struct Handler {
-    pub physical_memory_offset: VirtAddr,
-}
+pub struct Handler {}
 
 impl<'a> acpi::AcpiHandler for &Handler {
     unsafe fn map_physical_region<T>(
@@ -150,7 +140,7 @@ impl<'a> acpi::AcpiHandler for &Handler {
         size: usize,
     ) -> acpi::PhysicalMapping<Self, T> {
         let virtual_start =
-            ptr::NonNull::new((self.physical_memory_offset + physical_address).as_mut_ptr())
+            ptr::NonNull::new((memory::translate_physical(physical_address as u64)).as_mut_ptr())
                 .unwrap();
 
         acpi::PhysicalMapping::new(physical_address, virtual_start, size, size, self)
@@ -159,16 +149,9 @@ impl<'a> acpi::AcpiHandler for &Handler {
     fn unmap_physical_region<T>(_region: &acpi::PhysicalMapping<Self, T>) {}
 }
 
-pub fn load_aml(
-    physical_memory_offset: VirtAddr,
-    dsdt: &[u8],
-    pci_regions: acpi::PciConfigRegions,
-) -> AmlContext {
+pub fn load_aml(dsdt: &[u8], pci_regions: acpi::PciConfigRegions) -> AmlContext {
     debug!("parsing aml from dsdt table");
-    let handler = AmlHandler {
-        physical_memory_offset,
-        pci_regions,
-    };
+    let handler = AmlHandler { pci_regions };
     let mut context = AmlContext::new(Box::new(handler), aml::DebugVerbosity::None);
 
     context.parse_table(dsdt).unwrap();
@@ -188,41 +171,40 @@ pub fn load_aml(
 }
 
 struct AmlHandler {
-    physical_memory_offset: VirtAddr,
     pci_regions: acpi::PciConfigRegions,
 }
 
 impl aml::Handler for AmlHandler {
     fn read_u8(&self, address: usize) -> u8 {
-        unsafe { *(self.physical_memory_offset + address).as_ptr() }
+        unsafe { *memory::translate_physical(address).as_ptr() }
     }
 
     fn read_u16(&self, address: usize) -> u16 {
-        unsafe { *(self.physical_memory_offset + address).as_ptr() }
+        unsafe { *memory::translate_physical(address).as_ptr() }
     }
 
     fn read_u32(&self, address: usize) -> u32 {
-        unsafe { *(self.physical_memory_offset + address).as_ptr() }
+        unsafe { *memory::translate_physical(address).as_ptr() }
     }
 
     fn read_u64(&self, address: usize) -> u64 {
-        unsafe { *(self.physical_memory_offset + address).as_ptr() }
+        unsafe { *memory::translate_physical(address).as_ptr() }
     }
 
     fn write_u8(&mut self, address: usize, value: u8) {
-        unsafe { *(self.physical_memory_offset + address).as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(address).as_mut_ptr() = value }
     }
 
     fn write_u16(&mut self, address: usize, value: u16) {
-        unsafe { *(self.physical_memory_offset + address).as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(address).as_mut_ptr() = value }
     }
 
     fn write_u32(&mut self, address: usize, value: u32) {
-        unsafe { *(self.physical_memory_offset + address).as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(address).as_mut_ptr() = value }
     }
 
     fn write_u64(&mut self, address: usize, value: u64) {
-        unsafe { *(self.physical_memory_offset + address).as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(address).as_mut_ptr() = value }
     }
 
     fn read_io_u8(&self, port: u16) -> u8 {
@@ -256,9 +238,7 @@ impl aml::Handler for AmlHandler {
             .unwrap()
             + offset as u64;
 
-        let virt_addr = self.physical_memory_offset + phys_addr;
-
-        unsafe { *virt_addr.as_ptr() }
+        unsafe { *memory::translate_physical(phys_addr).as_ptr() }
     }
 
     fn read_pci_u16(&self, segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u16 {
@@ -268,9 +248,7 @@ impl aml::Handler for AmlHandler {
             .unwrap()
             + offset as u64;
 
-        let virt_addr = self.physical_memory_offset + phys_addr;
-
-        unsafe { *virt_addr.as_ptr() }
+        unsafe { *memory::translate_physical(phys_addr).as_ptr() }
     }
 
     fn read_pci_u32(&self, segment: u16, bus: u8, device: u8, function: u8, offset: u16) -> u32 {
@@ -280,9 +258,7 @@ impl aml::Handler for AmlHandler {
             .unwrap()
             + offset as u64;
 
-        let virt_addr = self.physical_memory_offset + phys_addr;
-
-        unsafe { *virt_addr.as_ptr() }
+        unsafe { *memory::translate_physical(phys_addr).as_ptr() }
     }
 
     fn write_pci_u8(
@@ -300,9 +276,7 @@ impl aml::Handler for AmlHandler {
             .unwrap()
             + offset as u64;
 
-        let virt_addr = self.physical_memory_offset + phys_addr;
-
-        unsafe { *virt_addr.as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(phys_addr).as_mut_ptr() = value }
     }
 
     fn write_pci_u16(
@@ -320,9 +294,7 @@ impl aml::Handler for AmlHandler {
             .unwrap()
             + offset as u64;
 
-        let virt_addr = self.physical_memory_offset + phys_addr;
-
-        unsafe { *virt_addr.as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(phys_addr).as_mut_ptr() = value }
     }
 
     fn write_pci_u32(
@@ -340,8 +312,6 @@ impl aml::Handler for AmlHandler {
             .unwrap()
             + offset as u64;
 
-        let virt_addr = self.physical_memory_offset + phys_addr;
-
-        unsafe { *virt_addr.as_mut_ptr() = value }
+        unsafe { *memory::translate_physical(phys_addr).as_mut_ptr() = value }
     }
 }

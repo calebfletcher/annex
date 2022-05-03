@@ -65,17 +65,15 @@ pub fn init(
 
     let mut mapper = unsafe { memory::init(physical_memory_offset) };
     let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialisation failed");
 
     memory::MemoryManager::init(physical_memory_offset, mapper, frame_allocator);
 
-    let handler = acpi::Handler {
-        physical_memory_offset,
-    };
-    let acpi = acpi::Acpi::init(&handler, rsdp_address, physical_memory_offset);
+    let handler = acpi::Handler {};
+    let acpi = acpi::Acpi::init(&handler, rsdp_address);
     debug!("acpi lapic addr {:p}", acpi.local_apic_address());
 
-    let apic_address = memory::manager().translate_physical(acpi.local_apic_address());
+    let apic_address = memory::translate_physical(acpi.local_apic_address());
     apic::init(apic_address);
 
     acpi.ioapic();
@@ -103,7 +101,18 @@ pub fn hlt_loop() -> ! {
 bootloader::entry_point!(entry_point);
 #[cfg(test)]
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
-    init(info.framebuffer.as_mut().unwrap());
+    logger::init();
+
+    let framebuffer = info.framebuffer.as_mut().unwrap();
+    let rsdp_address = PhysAddr::new(info.rsdp_addr.into_option().unwrap());
+    let physical_memory_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
+    let memory_regions = &info.memory_regions;
+    init(
+        framebuffer,
+        rsdp_address,
+        physical_memory_offset,
+        memory_regions,
+    );
     test_main();
     hlt_loop();
 }
