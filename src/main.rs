@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use core::arch::{asm, global_asm};
+use core::arch::asm;
 
 use annex::{
     println, screen,
@@ -15,7 +15,7 @@ use annex::{
     threading,
 };
 use log::info;
-use x86_64::{PhysAddr, VirtAddr};
+use x86_64::{instructions::interrupts, PhysAddr, VirtAddr};
 
 mod panic;
 
@@ -42,18 +42,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     test_main();
 
     threading::init();
-
-    loop {
-        unsafe {
-            asm! {
-                "
-                mov dx, 0x3F8
-                mov al, 0x41
-                out dx, al
-            ",
-            }
-        };
-    }
+    threading::add_thread(task2, 4096);
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
@@ -62,6 +51,21 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     println!("loaded kernel");
 
     executor.run();
+}
+
+fn task2() -> ! {
+    interrupts::enable();
+    loop {
+        unsafe {
+            asm! {
+                "
+                mov dx, 0x3F8
+                mov al, 0x42
+                out dx, al
+            ",
+            }
+        };
+    }
 }
 
 #[test_case]

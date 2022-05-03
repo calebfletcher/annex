@@ -3,84 +3,82 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use alloc::{borrow::ToOwned, boxed::Box, string::String};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec};
 use arrayvec::ArrayVec;
 use spin::Mutex;
 use x86_64::{instructions::interrupts, registers::control::Cr3, PhysAddr, VirtAddr};
 
-enum TaskState {
+static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+
+enum ThreadState {
     Running,
+    ReadyToRun,
     Blocked,
 }
 
 #[repr(C)]
-pub struct Task {
+pub struct Thread {
     id: usize,
     stack_top: VirtAddr,
     page_table: PhysAddr,
     name: String,
-    state: TaskState,
+    state: ThreadState,
 }
 
-// Creates a task struct for the initial kernel task that is running (id 0)
+// Create a thread struct for the initial kernel thread that is running (id 0)
 pub fn init() {
     let (page_table, _) = Cr3::read();
     let page_table = page_table.start_address();
-    TASKS.lock().push(Task {
-        id: 4,
-        name: "kernel1".to_owned(),
+
+    THREADS.lock().push(Thread {
+        id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
+        name: "kernel".to_owned(),
         stack_top: VirtAddr::new(0),
         page_table,
-        state: TaskState::Running,
+        state: ThreadState::Running,
     });
+}
 
-    let stack = Box::leak(Box::new([0u64; 4096]));
+pub fn add_thread(entry: fn() -> !, stack_size: usize) {
+    // Create stack for the new thread
+    let stack = Box::leak(vec![0u64; stack_size].into_boxed_slice());
 
-    // Order from the register pops below
-    stack[4095] = task2 as *const () as u64; // rip
-    stack[4094] = 0x0; // rbx
-    stack[4093] = 0x0; // r12
-    stack[4092] = 0x0; // r13
-    stack[4091] = 0x0; // r14
-    stack[4090] = 0x0; // r15
+    // Initialise stack in the reverse order registers get popped off it
+    stack[stack_size - 1] = entry as *const () as u64; // rip
+    stack[stack_size - 2] = 0x0; // rbx
+    stack[stack_size - 3] = 0x0; // r12
+    stack[stack_size - 4] = 0x0; // r13
+    stack[stack_size - 5] = 0x0; // r14
+    stack[stack_size - 6] = 0x0; // r15
 
+    // Pointer to where the stack pointer needs to be so the ret lines up with the entry point
     let stack_pointer = unsafe { (&mut stack[stack.len() - 1] as *mut u64).sub(5) };
 
-    TASKS.lock().push(Task {
-        id: 7,
+    // Get address to kernel's page table
+    let (page_table, _) = Cr3::read();
+    let page_table = page_table.start_address();
+
+    // Add a new thread to the list
+    THREADS.lock().push(Thread {
+        id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
         name: "kernel2".to_owned(),
         stack_top: VirtAddr::new(stack_pointer as u64),
         page_table,
-        state: TaskState::Running,
+        state: ThreadState::ReadyToRun,
     });
 }
 
-pub extern "C" fn task2() -> ! {
-    interrupts::enable();
-    loop {
-        unsafe {
-            asm! {
-                "
-                mov dx, 0x3F8
-                mov al, 0x42
-                out dx, al
-            ",
-            }
-        };
-    }
-}
-
-static TASKS: Mutex<ArrayVec<Task, 100>> = Mutex::new(ArrayVec::new_const());
-// TODO: what happens when a task is removed from the arrayvec?
-pub static CURRENT_TASK_INDEX: AtomicUsize = AtomicUsize::new(0);
+static THREADS: Mutex<ArrayVec<Thread, 100>> = Mutex::new(ArrayVec::new_const());
+// TODO: what happens when a thread is removed from the arrayvec?
+pub static ACTIVE_THREAD_INDEX: AtomicUsize = AtomicUsize::new(0);
 
 /// # Safety
 /// Interrupts must be disabled before calling this function
 #[naked]
-pub unsafe extern "C" fn switch_to_task(
+pub unsafe extern "C" fn switch_to_thread(
     current_index: *mut usize,
-    from_tcb: *const Task,
-    to_tcb: *const Task,
+    from_tcb: *const Thread,
+    to_tcb: *const Thread,
     to_index: usize,
 ) {
     asm!(
@@ -92,12 +90,9 @@ pub unsafe extern "C" fn switch_to_task(
         push r14
         push r15
 
-        //mov rax, [rsi]          // id of old thread
-        //mov rbx, [rdx]          // id of new thread
-
         mov [rsi+8], rsp        // save old thead's stack pointer
 
-        mov [rdi], rcx          // update CURRENT_TASK_INDEX with new task
+        mov [rdi], rcx          // update CURRENT_THREAD_INDEX with new thread
 
         mov rsp, [rdx + 8]      // load new thread's stack pointer
         mov rax, [rdx + 16]     // load new thread's page table
@@ -126,28 +121,30 @@ pub unsafe extern "C" fn switch_to_task(
 }
 
 pub fn switch(to: usize) {
-    let from = CURRENT_TASK_INDEX.load(Ordering::SeqCst);
     interrupts::disable();
-    // serial_println!(
-    //     "old current task {}",
-    //     CURRENT_TASK_INDEX.load(Ordering::SeqCst)
-    // );
-    let tasks = unsafe {
-        TASKS.force_unlock();
-        TASKS.lock()
+
+    let from = ACTIVE_THREAD_INDEX.load(Ordering::SeqCst);
+
+    // TODO: fix this force unlock
+    let threads = unsafe {
+        THREADS.force_unlock();
+        THREADS.lock()
     };
     // TODO: fix dodgy hack that handles interrupts before init
-    if to >= tasks.len() {
+    if to >= threads.len() {
         return;
     }
-    let current_task = &tasks[from] as *const Task;
-    let next_task = &tasks[to] as *const Task;
+    let current_thread = &threads[from] as *const Thread;
+    let next_thread = &threads[to] as *const Thread;
 
-    //serial_println!("task ids {} {}", tasks[from].id, tasks[to].id);
-    unsafe { switch_to_task(CURRENT_TASK_INDEX.as_mut_ptr(), current_task, next_task, to) };
-    // serial_println!(
-    //     "new current task {}",
-    //     CURRENT_TASK_INDEX.load(Ordering::SeqCst)
-    // );
+    unsafe {
+        switch_to_thread(
+            ACTIVE_THREAD_INDEX.as_mut_ptr(),
+            current_thread,
+            next_thread,
+            to,
+        )
+    };
+
     interrupts::enable();
 }

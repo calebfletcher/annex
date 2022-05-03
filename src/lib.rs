@@ -5,6 +5,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(const_mut_refs)]
 #![feature(naked_functions)]
+#![feature(never_type)]
 #![feature(atomic_mut_ptr)]
 #![feature(alloc_error_handler)]
 #![allow(incomplete_features)]
