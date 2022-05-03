@@ -7,23 +7,35 @@
 
 extern crate alloc;
 
+use core::arch::global_asm;
+
 use annex::{
-    allocator, cmos, memory, println, screen,
-    task::{self, executor::Executor, Task},
-    timer,
+    println, screen,
+    task::{executor::Executor, Task},
 };
 use log::info;
 use x86_64::{PhysAddr, VirtAddr};
 
 mod panic;
 
+global_asm!(include_str!("threading/task1.asm"));
+global_asm!(include_str!("threading/task2.asm"));
+
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     annex::logger::init();
 
     let framebuffer = info.framebuffer.as_mut().unwrap();
+    let rsdp_address = PhysAddr::new(info.rsdp_addr.into_option().unwrap());
+    let physical_memory_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
+    let memory_regions = &info.memory_regions;
+    annex::init(
+        framebuffer,
+        rsdp_address,
+        physical_memory_offset,
+        memory_regions,
+    );
 
-    annex::init(framebuffer);
     info!("starting kernel");
     println!("starting kernel");
 
@@ -31,31 +43,23 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-    let physical_memory_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
-    let rsdp_address = PhysAddr::new(info.rsdp_addr.into_option().unwrap());
-
-    let phys_mem_offset = VirtAddr::new(info.physical_memory_offset.into_option().unwrap());
-    let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(&info.memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
-
-    let handler = annex::acpi::Handler {
-        physical_memory_offset,
-    };
-    let acpi = annex::acpi::Acpi::init(&handler, rsdp_address, physical_memory_offset);
-    let apic_addr = physical_memory_offset + acpi.local_apic_address().as_u64();
-    acpi.ioapic();
-    timer::init(apic_addr);
-    task::keyboard::init();
-    cmos::RTC
-        .try_init_once(|| cmos::Rtc::new(acpi.fadt().century))
-        .unwrap();
-
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
     executor.spawn(Task::new(annex::user::shell::run()));
 
     println!("loaded kernel");
+
+    // let i: u64 = 0x4142434445464748_u64.swap_bytes();
+    // unsafe {
+    //     asm!(
+    //         "call task1",
+    //         in("r8") i
+    //     );
+    // }
+
+    // println!("executing");
+    // annex::hlt_loop();
+
     executor.run();
 }
 

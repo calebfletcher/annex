@@ -40,6 +40,15 @@ impl<'a> Acpi<'a> {
         let context = load_aml(physical_memory_offset, dsdt, pci_regions);
 
         let platform_info = table.platform_info().unwrap();
+        debug!(
+            "found local apic id {}",
+            platform_info
+                .processor_info
+                .as_ref()
+                .unwrap()
+                .boot_processor
+                .local_apic_id
+        );
 
         let fadt: acpi::PhysicalMapping<&Handler, acpi::fadt::Fadt> =
             unsafe { table.get_sdt(Signature::FADT).unwrap().unwrap() };
@@ -68,6 +77,10 @@ impl<'a> Acpi<'a> {
         } else {
             unimplemented!("no apic found");
         };
+        debug!(
+            "using ioapic at physical address {:p}",
+            ioapic.address as *const u8
+        );
 
         IOAPIC
             .try_init_once(|| {

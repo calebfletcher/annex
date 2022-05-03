@@ -1,7 +1,14 @@
+use alloc::{format, string::String};
 use bootloader::boot_info::{MemoryRegionKind, MemoryRegions};
+use conquer_once::noblock::OnceCell;
+use log::{debug, warn};
+use spin::Mutex;
 use x86_64::{
     registers::control::Cr3,
-    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
+    structures::paging::{
+        FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame,
+        Size4KiB,
+    },
     PhysAddr, VirtAddr,
 };
 
@@ -33,12 +40,11 @@ pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static>
     OffsetPageTable::new(level_4_table, physical_memory_offset)
 }
 
+type FrameIter = impl Iterator<Item = PhysFrame>;
 /// A FrameAllocator that returns usable frames from the bootloader's memory map.
 pub struct BootInfoFrameAllocator {
     usable_frames: FrameIter,
 }
-
-type FrameIter = impl Iterator<Item = PhysFrame>;
 
 impl BootInfoFrameAllocator {
     /// Create a FrameAllocator from the passed memory map.
@@ -65,6 +71,81 @@ impl BootInfoFrameAllocator {
 
 unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> {
-        self.usable_frames.next()
+        let frame = self.usable_frames.next();
+
+        match frame {
+            Some(frame) => debug!("allocating frame at {:p}", frame.start_address()),
+            None => warn!("boot info frame allocator exhausted"),
+        }
+        frame
     }
+}
+
+pub fn format_bytes(mut value: u64) -> String {
+    let units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+
+    let mut unit = units[units.len() - 1];
+    for suffix_unit in units {
+        if value < 1024 {
+            unit = suffix_unit;
+            break;
+        }
+        value >>= 10;
+    }
+
+    format!("{} {}", value, unit)
+}
+
+/// An object responsible for mapping pages between the kernel's virtual memory
+/// and the physical memory.
+pub struct MemoryManager {
+    /// Virtual address that physical memory has been mapped to
+    physical_memory_offset: VirtAddr,
+    page_table: OffsetPageTable<'static>,
+    frame_allocator: BootInfoFrameAllocator,
+}
+
+pub static MANAGER: OnceCell<Mutex<MemoryManager>> = OnceCell::uninit();
+
+impl MemoryManager {
+    pub fn init(
+        physical_memory_offset: VirtAddr,
+        page_table: OffsetPageTable<'static>,
+        frame_allocator: BootInfoFrameAllocator,
+    ) {
+        MANAGER
+            .try_init_once(|| {
+                Mutex::new(MemoryManager {
+                    physical_memory_offset,
+                    page_table,
+                    frame_allocator,
+                })
+            })
+            .unwrap();
+    }
+
+    pub fn map_physical_address(&mut self, addr: PhysAddr, additional_flags: PageTableFlags) {
+        let flags = PageTableFlags::PRESENT | additional_flags;
+        let page: Page<Size4KiB> =
+            Page::containing_address(self.physical_memory_offset + addr.as_u64());
+        let frame = PhysFrame::containing_address(addr);
+        unsafe {
+            // Flush TLB if mapping was successful
+            if let Ok(mapping) =
+                self.page_table
+                    .map_to(page, frame, flags, &mut self.frame_allocator)
+            {
+                mapping.flush();
+            }
+        };
+    }
+
+    pub fn translate_physical(&self, addr: PhysAddr) -> VirtAddr {
+        self.physical_memory_offset + addr.as_u64()
+    }
+}
+
+/// Gets a lock on the mutex of the memory manager
+pub fn manager<'a>() -> spin::MutexGuard<'a, MemoryManager> {
+    MANAGER.try_get().unwrap().lock()
 }

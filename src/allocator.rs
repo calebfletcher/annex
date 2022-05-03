@@ -5,6 +5,7 @@ pub mod fixed_size_block;
 #[cfg(feature = "allocator_linked_list")]
 pub mod linked_list;
 
+use log::debug;
 use x86_64::{
     structures::paging::{
         mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
@@ -26,6 +27,12 @@ pub fn init_heap(
         let heap_end_page = Page::containing_address(heap_end);
         Page::range_inclusive(heap_start_page, heap_end_page)
     };
+
+    debug!(
+        "kernel heap loaded from {:p} to {:p}",
+        page_range.start.start_address().as_ptr::<u8>(),
+        (page_range.end.start_address() + page_range.end.size()).as_ptr::<u8>()
+    );
 
     for page in page_range {
         let frame = frame_allocator
