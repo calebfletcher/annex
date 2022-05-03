@@ -19,9 +19,6 @@ use x86_64::{PhysAddr, VirtAddr};
 
 mod panic;
 
-global_asm!(include_str!("threading/task1.asm"));
-global_asm!(include_str!("threading/task2.asm"));
-
 bootloader::entry_point!(entry_point);
 fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     annex::logger::init();
