@@ -51,7 +51,7 @@ qemu:
     fi    
 
 # Run QEMU but wait for debugger
-qemu-dbg:
+qemu-dbg: build
     qemu-system-x86_64 {{qemu_args}} -S
 
 gdb:

@@ -4,6 +4,8 @@
 #![feature(abi_x86_interrupt)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_mut_refs)]
+#![feature(naked_functions)]
+#![feature(atomic_mut_ptr)]
 #![feature(alloc_error_handler)]
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
@@ -35,6 +37,7 @@ pub mod logger;
 pub mod pic;
 #[allow(unused_imports)]
 pub mod test;
+pub mod threading;
 
 extern crate alloc;
 

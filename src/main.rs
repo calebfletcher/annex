@@ -7,11 +7,12 @@
 
 extern crate alloc;
 
-use core::arch::global_asm;
+use core::arch::{asm, global_asm};
 
 use annex::{
     println, screen,
     task::{executor::Executor, Task},
+    threading,
 };
 use log::info;
 use x86_64::{PhysAddr, VirtAddr};
@@ -43,22 +44,25 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
+    threading::init();
+
+    loop {
+        unsafe {
+            asm! {
+                "
+                mov dx, 0x3F8
+                mov al, 0x41
+                out dx, al
+            ",
+            }
+        };
+    }
+
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
     executor.spawn(Task::new(annex::user::shell::run()));
 
     println!("loaded kernel");
-
-    // let i: u64 = 0x4142434445464748_u64.swap_bytes();
-    // unsafe {
-    //     asm!(
-    //         "call task1",
-    //         in("r8") i
-    //     );
-    // }
-
-    // println!("executing");
-    // annex::hlt_loop();
 
     executor.run();
 }
