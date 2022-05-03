@@ -14,6 +14,10 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::new_without_default)]
 
+use bootloader::boot_info::{FrameBuffer, MemoryRegions};
+use log::debug;
+use x86_64::{PhysAddr, VirtAddr};
+
 pub mod acpi;
 pub mod allocator;
 pub mod colour;
@@ -25,19 +29,23 @@ pub mod serial;
 pub mod task;
 pub mod user;
 
+pub mod apic;
 pub mod cmos;
 pub mod logger;
-pub mod log;
+pub mod pic;
 #[allow(unused_imports)]
 pub mod test;
-pub mod timer;
 
 extern crate alloc;
 
-pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
-    let frame_buffer = framebuffer;
-    let buffer_info = frame_buffer.info();
-    let buffer = frame_buffer.buffer_mut();
+pub fn init(
+    framebuffer: &'static mut FrameBuffer,
+    rsdp_address: PhysAddr,
+    physical_memory_offset: VirtAddr,
+    memory_regions: &'static MemoryRegions,
+) {
+    let buffer_info = framebuffer.info();
+    let buffer = framebuffer.buffer_mut();
 
     // Initialise screen
     let mut screen = screen::Screen::new(buffer, buffer_info);
@@ -50,10 +58,31 @@ pub fn init(framebuffer: &'static mut bootloader::boot_info::FrameBuffer) {
     interrupts::init_idt();
 
     // Disable PIC interrupts since we're using the APIC
-    unsafe { interrupts::PICS.lock().initialize() };
-    unsafe { interrupts::PICS.lock().write_masks(0xFF, 0xFF) };
+    pic::disable();
 
+    // Enable interrupts
     x86_64::instructions::interrupts::enable();
+
+    let mut mapper = unsafe { memory::init(physical_memory_offset) };
+    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(memory_regions) };
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+
+    memory::MemoryManager::init(physical_memory_offset, mapper, frame_allocator);
+
+    let handler = acpi::Handler {
+        physical_memory_offset,
+    };
+    let acpi = acpi::Acpi::init(&handler, rsdp_address, physical_memory_offset);
+    debug!("acpi lapic addr {:p}", acpi.local_apic_address());
+
+    let apic_address = memory::manager().translate_physical(acpi.local_apic_address());
+    apic::init(apic_address);
+
+    acpi.ioapic();
+    task::keyboard::init();
+    cmos::RTC
+        .try_init_once(|| cmos::Rtc::new(acpi.fadt().century))
+        .unwrap();
 }
 
 fn init_terminal(screen: screen::Screen<'static>) {

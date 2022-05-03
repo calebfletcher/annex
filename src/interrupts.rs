@@ -1,18 +1,10 @@
-use crate::{gdt, hlt_loop, println, serial_println, timer};
+use crate::{apic, gdt, hlt_loop, println, serial_println};
 use lazy_static::lazy_static;
-use pic8259::ChainedPics;
-use spin;
 use x86_64::{
     instructions::port::Port,
     registers::control::Cr2,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
 };
-
-pub const PIC_1_OFFSET: u8 = 0x20;
-pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
-
-pub static PICS: spin::Mutex<ChainedPics> =
-    spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -58,23 +50,11 @@ extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: Interr
     let scancode: u8 = unsafe { port.read() };
     crate::task::keyboard::add_scancode(scancode);
 
-    unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
+    unsafe { apic::LAPIC.try_get().unwrap().lock().end_of_interrupt() };
 }
 
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    // static TOGGLE: AtomicU8 = AtomicU8::new(0);
-
-    // let states = ['/', '-', '\\', '|', '/', '-', '\\', '|'];
-    // let c = states[TOGGLE
-    //     .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |a| Some((a + 1) % 8))
-    //     .unwrap() as usize];
-    // screen::CONSOLE.try_get().unwrap().lock().write_at(
-    //     0,
-    //     700,
-    //     c,
-    //     TextColour::new(colour::RED, colour::BLACK),
-    // );
-    unsafe { timer::APIC.try_get().unwrap().lock().end_of_interrupt() };
+    unsafe { apic::LAPIC.try_get().unwrap().lock().end_of_interrupt() };
 }
 
 extern "x86-interrupt" fn invalid_tss_handler(stack_frame: InterruptStackFrame, code: u64) {
