@@ -3,83 +3,53 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use alloc::{borrow::ToOwned, boxed::Box, string::String, vec};
-use arrayvec::ArrayVec;
+use alloc::{borrow::ToOwned, collections::BTreeMap};
+
 use spin::Mutex;
-use x86_64::{instructions::interrupts, registers::control::Cr3, PhysAddr, VirtAddr};
+use x86_64::{instructions::interrupts, registers::control::Cr3};
 
-static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+pub mod thread;
+pub use thread::{Thread, ThreadState};
 
-enum ThreadState {
-    Running,
-    ReadyToRun,
-    Blocked,
-}
+use self::thread::Stack;
 
-#[repr(C)]
-pub struct Thread {
-    id: usize,
-    stack_top: VirtAddr,
-    page_table: PhysAddr,
-    name: String,
-    state: ThreadState,
-}
+/// Map between thread id and thread object
+static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
+pub static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
 // Create a thread struct for the initial kernel thread that is running (id 0)
 pub fn init() {
     let (page_table, _) = Cr3::read();
     let page_table = page_table.start_address();
 
-    THREADS.lock().push(Thread {
-        id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
-        name: "kernel".to_owned(),
-        stack_top: VirtAddr::new(0),
-        page_table,
-        state: ThreadState::Running,
-    });
+    let tcb = Thread::bootstrap(page_table);
+    THREADS.lock().insert(tcb.id(), tcb);
 }
 
 pub fn add_thread(entry: fn() -> !, stack_size: usize) {
-    // Create stack for the new thread
-    let stack = Box::leak(vec![0u64; stack_size].into_boxed_slice());
-
-    // Initialise stack in the reverse order registers get popped off it
-    stack[stack_size - 1] = entry as *const () as u64; // rip
-    stack[stack_size - 2] = 0x0; // rbx
-    stack[stack_size - 3] = 0x0; // r12
-    stack[stack_size - 4] = 0x0; // r13
-    stack[stack_size - 5] = 0x0; // r14
-    stack[stack_size - 6] = 0x0; // r15
-
-    // Pointer to where the stack pointer needs to be so the ret lines up with the entry point
-    let stack_pointer = unsafe { (&mut stack[stack.len() - 1] as *mut u64).sub(5) };
-
     // Get address to kernel's page table
     let (page_table, _) = Cr3::read();
     let page_table = page_table.start_address();
 
-    // Add a new thread to the list
-    THREADS.lock().push(Thread {
-        id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
-        name: "kernel2".to_owned(),
-        stack_top: VirtAddr::new(stack_pointer as u64),
-        page_table,
-        state: ThreadState::ReadyToRun,
-    });
-}
+    let stack = Stack::new(stack_size, entry);
 
-static THREADS: Mutex<ArrayVec<Thread, 100>> = Mutex::new(ArrayVec::new_const());
-// TODO: what happens when a thread is removed from the arrayvec?
-pub static ACTIVE_THREAD_INDEX: AtomicUsize = AtomicUsize::new(0);
+    // Add a new thread to the list
+    let tcb = Thread::new(
+        stack.initial_stack_pointer(),
+        page_table,
+        "kernel2".to_owned(),
+        stack,
+    );
+    THREADS.lock().insert(tcb.id(), tcb);
+}
 
 /// # Safety
 /// Interrupts must be disabled before calling this function
 #[naked]
 pub unsafe extern "C" fn switch_to_thread(
-    current_index: *mut usize,
+    current_id: *mut usize,
     from_tcb: *const Thread,
     to_tcb: *const Thread,
-    to_index: usize,
 ) {
     asm!(
         "
@@ -92,10 +62,11 @@ pub unsafe extern "C" fn switch_to_thread(
 
         mov [rsi+8], rsp        // save old thead's stack pointer
 
-        mov [rdi], rcx          // update CURRENT_THREAD_INDEX with new thread
-
         mov rsp, [rdx + 8]      // load new thread's stack pointer
         mov rax, [rdx + 16]     // load new thread's page table
+
+        mov rcx, [rdx]
+        mov [rdi], rcx          // update CURRENT_THREAD_ID with new thread's id
         
         // TODO: load TSS ESP0?
 
@@ -123,7 +94,7 @@ pub unsafe extern "C" fn switch_to_thread(
 pub fn switch(to: usize) {
     interrupts::disable();
 
-    let from = ACTIVE_THREAD_INDEX.load(Ordering::SeqCst);
+    let from = ACTIVE_THREAD_ID.load(Ordering::SeqCst);
 
     // TODO: fix this force unlock
     let threads = unsafe {
@@ -134,17 +105,10 @@ pub fn switch(to: usize) {
     if to >= threads.len() {
         return;
     }
-    let current_thread = &threads[from] as *const Thread;
-    let next_thread = &threads[to] as *const Thread;
+    let current_thread = threads.get(&from).unwrap() as *const Thread;
+    let next_thread = threads.get(&to).unwrap() as *const Thread;
 
-    unsafe {
-        switch_to_thread(
-            ACTIVE_THREAD_INDEX.as_mut_ptr(),
-            current_thread,
-            next_thread,
-            to,
-        )
-    };
+    unsafe { switch_to_thread(ACTIVE_THREAD_ID.as_mut_ptr(), current_thread, next_thread) };
 
     interrupts::enable();
 }
