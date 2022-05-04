@@ -4,7 +4,7 @@ use alloc::string::String;
 use futures_util::{Stream, StreamExt};
 use pc_keyboard::DecodedKey;
 
-use crate::{print, println};
+use crate::print;
 
 pub struct Editor<S>
 where
@@ -30,8 +30,7 @@ impl<S: Stream<Item = DecodedKey> + marker::Unpin> Editor<S> {
         while let Some(key) = self.input.next().await {
             // Ignore raw keys (Alt, Ctrl, other modifier keys)
             let key = match key {
-                DecodedKey::RawKey(key) => {
-                    println!("ignoring {:?}", key);
+                DecodedKey::RawKey(_key) => {
                     continue;
                 }
                 DecodedKey::Unicode(key) => key,
@@ -57,9 +56,7 @@ impl<S: Stream<Item = DecodedKey> + marker::Unpin> Editor<S> {
                     // Delete
                     self.current_line.pop();
                 }
-                _ => {
-                    println!("ignoring {:?}", key);
-                }
+                _ => {}
             }
         }
 
