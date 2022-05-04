@@ -17,6 +17,7 @@
 // in the kernel
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::new_without_default)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use bootloader::boot_info::{FrameBuffer, MemoryRegions};
 use log::debug;

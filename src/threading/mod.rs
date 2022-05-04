@@ -51,8 +51,9 @@ pub unsafe extern "C" fn switch_to_thread(
     from_tcb: *const Thread,
     to_tcb: *const Thread,
 ) {
-    asm!(
-        "
+    unsafe {
+        asm!(
+            "
         // store registers
         push rbx
         push r12
@@ -87,8 +88,9 @@ pub unsafe extern "C" fn switch_to_thread(
         ret
 
     ",
-        options(noreturn)
-    );
+            options(noreturn)
+        );
+    }
 }
 
 pub fn switch(to: usize) {
