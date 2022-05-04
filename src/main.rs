@@ -43,6 +43,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 
     threading::init();
     threading::add_thread(task2, 4096);
+    threading::start();
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));

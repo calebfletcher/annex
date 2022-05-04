@@ -6,6 +6,7 @@
 #![feature(const_mut_refs)]
 #![feature(naked_functions)]
 #![feature(const_btree_new)]
+#![feature(map_first_last)]
 #![feature(never_type)]
 #![feature(atomic_mut_ptr)]
 #![feature(alloc_error_handler)]

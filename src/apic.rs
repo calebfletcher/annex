@@ -23,7 +23,7 @@ pub fn init(addr: VirtAddr) {
                 .set_xapic_base(addr.as_u64())
                 .timer_divide(x2apic::lapic::TimerDivide::Div16)
                 .timer_mode(x2apic::lapic::TimerMode::Periodic)
-                .timer_initial(10_000_000)
+                .timer_initial(100_000)
                 .build()
                 .unwrap_or_else(|err| panic!("{}", err));
 

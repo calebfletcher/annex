@@ -1,10 +1,11 @@
 use core::{
     arch::asm,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 use alloc::{borrow::ToOwned, collections::BTreeMap};
 
+use log::error;
 use spin::Mutex;
 use x86_64::{instructions::interrupts, registers::control::Cr3};
 
@@ -16,6 +17,7 @@ use self::thread::Stack;
 /// Map between thread id and thread object
 static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
 pub static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+pub static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // Create a thread struct for the initial kernel thread that is running (id 0)
 pub fn init() {
@@ -41,6 +43,48 @@ pub fn add_thread(entry: fn() -> !, stack_size: usize) {
         stack,
     );
     THREADS.lock().insert(tcb.id(), tcb);
+}
+
+pub fn start() {
+    SCHEDULER_ENABLED.store(true, Ordering::Release);
+}
+
+pub fn schedule() {
+    interrupts::disable();
+
+    if !SCHEDULER_ENABLED.load(Ordering::Acquire) {
+        return;
+    }
+
+    let threads = THREADS.lock();
+
+    // Round robin scheduler
+    let current_id = ACTIVE_THREAD_ID.load(Ordering::Acquire);
+
+    // Create an iterator
+    let mut thread_iter = threads.iter();
+    let _ = thread_iter.find(|(_, tcb)| tcb.id() == current_id);
+
+    // Either get the next thread in the list, or wrap back around to the start
+    let next_id = match thread_iter.next() {
+        Some((&next_id, _next_tcb)) => Some(next_id),
+        None => threads.first_key_value().map(|(&id, _tcb)| id),
+    };
+
+    // Drop mutex lock
+    drop(threads);
+
+    // If there was a thread, switch to it
+    match next_id {
+        Some(next_id) => unsafe {
+            switch(next_id);
+        },
+        None => {
+            error!("no threads available to be scheduled");
+        }
+    }
+
+    interrupts::enable();
 }
 
 /// # Safety
@@ -93,24 +137,16 @@ pub unsafe extern "C" fn switch_to_thread(
     }
 }
 
-pub fn switch(to: usize) {
-    interrupts::disable();
-
+/// # Safety
+/// Interrupts must be disabled before calling this function, and the
+/// scheduler lock must be unlocked.
+pub unsafe fn switch(to: usize) {
     let from = ACTIVE_THREAD_ID.load(Ordering::SeqCst);
 
-    // TODO: fix this force unlock
-    let threads = unsafe {
-        THREADS.force_unlock();
-        THREADS.lock()
-    };
-    // TODO: fix dodgy hack that handles interrupts before init
-    if to >= threads.len() {
-        return;
-    }
+    let threads = THREADS.lock();
     let current_thread = threads.get(&from).unwrap() as *const Thread;
     let next_thread = threads.get(&to).unwrap() as *const Thread;
+    drop(threads);
 
     unsafe { switch_to_thread(ACTIVE_THREAD_ID.as_mut_ptr(), current_thread, next_thread) };
-
-    interrupts::enable();
 }
