@@ -30,6 +30,7 @@ pub mod cmos;
 pub mod colour;
 pub mod emulators;
 pub mod gdt;
+pub mod hpet;
 pub mod interrupts;
 pub mod logger;
 pub mod memory;
@@ -87,6 +88,8 @@ pub fn init(
     cmos::RTC
         .try_init_once(|| cmos::Rtc::new(acpi.fadt().century))
         .unwrap();
+
+    hpet::init(acpi.hpet());
 }
 
 fn init_terminal(screen: screen::Screen<'static>) {

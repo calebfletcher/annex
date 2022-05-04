@@ -14,6 +14,7 @@ pub struct Acpi<'a> {
     platform_info: acpi::PlatformInfo,
     fadt: acpi::PhysicalMapping<&'a Handler, acpi::fadt::Fadt>,
     context: AmlContext,
+    hpet: acpi::HpetInfo,
 }
 
 impl<'a> Acpi<'a> {
@@ -48,10 +49,13 @@ impl<'a> Acpi<'a> {
         let fadt: acpi::PhysicalMapping<&Handler, acpi::fadt::Fadt> =
             unsafe { table.get_sdt(Signature::FADT).unwrap().unwrap() };
 
+        let hpet = acpi::HpetInfo::new(&table).unwrap();
+
         Self {
             platform_info,
             fadt,
             context,
+            hpet,
         }
     }
 
@@ -127,6 +131,12 @@ impl<'a> Acpi<'a> {
             *pm1a_cnt.as_mut_ptr() = current_value | 6 << 10 | 1 << 13;
         }
     }
+
+    /// Get a reference to the acpi's hpet.
+    #[must_use]
+    pub fn hpet(&self) -> &acpi::HpetInfo {
+        &self.hpet
+    }
 }
 
 pub static IOAPIC: OnceCell<spin::Mutex<IoApic>> = OnceCell::uninit();
@@ -143,7 +153,7 @@ impl<'a> acpi::AcpiHandler for &Handler {
             ptr::NonNull::new((memory::translate_physical(physical_address as u64)).as_mut_ptr())
                 .unwrap();
 
-        acpi::PhysicalMapping::new(physical_address, virtual_start, size, size, self)
+        unsafe { acpi::PhysicalMapping::new(physical_address, virtual_start, size, size, self) }
     }
 
     fn unmap_physical_region<T>(_region: &acpi::PhysicalMapping<Self, T>) {}
