@@ -23,23 +23,22 @@ use x86_64::{PhysAddr, VirtAddr};
 
 pub mod acpi;
 pub mod allocator;
+pub mod apic;
+pub mod cmos;
 pub mod colour;
+pub mod emulators;
 pub mod gdt;
 pub mod interrupts;
+pub mod logger;
 pub mod memory;
+pub mod pic;
 pub mod screen;
 pub mod serial;
 pub mod task;
-pub mod user;
-
-pub mod apic;
-pub mod cmos;
-pub mod emulators;
-pub mod logger;
-pub mod pic;
 #[allow(unused_imports)]
 pub mod test;
 pub mod threading;
+pub mod user;
 
 extern crate alloc;
 

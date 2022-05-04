@@ -1,4 +1,4 @@
-use core::{arch::asm, sync::atomic::Ordering};
+use core::sync::atomic::Ordering;
 
 use crate::{apic, gdt, hlt_loop, println, serial_println, threading};
 use lazy_static::lazy_static;
@@ -56,15 +56,6 @@ extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: Interr
 
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe { apic::LAPIC.try_get().unwrap().lock().end_of_interrupt() };
-    unsafe {
-        asm! {
-            "
-            mov dx, 0x3F8
-            mov al, 0x43
-            out dx, al
-        ",
-        }
-    };
 
     threading::switch(1 - threading::ACTIVE_THREAD_INDEX.load(Ordering::Acquire));
 }

@@ -61,7 +61,7 @@ fn task2() -> ! {
                 "
                 mov dx, 0x3F8
                 mov al, 0x42
-                out dx, al
+                //out dx, al
             ",
             }
         };
