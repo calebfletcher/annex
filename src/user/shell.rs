@@ -68,6 +68,10 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
         "ts" => {
             println!("time since boot: {:.3} s", hpet::seconds());
         }
+        "shutdown" => {
+            println!("shutdown currently not working");
+            acpi::ACPI.try_get().unwrap().try_lock().unwrap().shutdown();
+        }
         _ => println!("unknown command: {}", cmd),
     }
 }

@@ -5,58 +5,64 @@ use alloc::boxed::Box;
 use aml::{AmlContext, AmlError, AmlName, AmlValue};
 use conquer_once::noblock::OnceCell;
 use log::{debug, error, warn};
+use spin::Mutex;
 use x2apic::ioapic::IoApic;
 use x86_64::{instructions::port::Port, PhysAddr};
 
-use crate::{dbg, memory, println};
+use crate::memory;
 
-pub struct Acpi<'a> {
+pub static ACPI: OnceCell<Mutex<Acpi>> = OnceCell::uninit();
+
+pub struct Acpi {
     platform_info: acpi::PlatformInfo,
-    fadt: acpi::PhysicalMapping<&'a Handler, acpi::fadt::Fadt>,
+    fadt: acpi::PhysicalMapping<&'static Handler, acpi::fadt::Fadt>,
     context: AmlContext,
     hpet: acpi::HpetInfo,
 }
 
-impl<'a> Acpi<'a> {
-    pub fn init(handler: &'a Handler, rsdp_address: PhysAddr) -> Self {
-        debug!("decoding acpi tables");
-        let table = unsafe {
-            acpi::AcpiTables::from_rsdp(handler, rsdp_address.as_u64() as usize).unwrap()
-        };
+impl Acpi {
+    pub fn init(rsdp_address: PhysAddr) {
+        ACPI.try_init_once(|| {
+            debug!("decoding acpi tables");
+            let table = unsafe {
+                acpi::AcpiTables::from_rsdp(&Handler {}, rsdp_address.as_u64() as usize).unwrap()
+            };
 
-        let pci_regions = acpi::PciConfigRegions::new(&table).unwrap();
+            let pci_regions = acpi::PciConfigRegions::new(&table).unwrap();
 
-        let dsdt = table.dsdt.as_ref().unwrap();
-        let dsdt: &[u8] = unsafe {
-            slice::from_raw_parts(
-                memory::translate_physical(dsdt.address).as_ptr(),
-                dsdt.length as usize,
-            )
-        };
-        let context = load_aml(dsdt, pci_regions);
+            let dsdt = table.dsdt.as_ref().unwrap();
+            let dsdt: &[u8] = unsafe {
+                slice::from_raw_parts(
+                    memory::translate_physical(dsdt.address).as_ptr(),
+                    dsdt.length as usize,
+                )
+            };
+            let context = load_aml(dsdt, pci_regions);
 
-        let platform_info = table.platform_info().unwrap();
-        debug!(
-            "found local apic id {}",
-            platform_info
-                .processor_info
-                .as_ref()
-                .unwrap()
-                .boot_processor
-                .local_apic_id
-        );
+            let platform_info = table.platform_info().unwrap();
+            debug!(
+                "found local apic id {}",
+                platform_info
+                    .processor_info
+                    .as_ref()
+                    .unwrap()
+                    .boot_processor
+                    .local_apic_id
+            );
 
-        let fadt: acpi::PhysicalMapping<&Handler, acpi::fadt::Fadt> =
-            unsafe { table.get_sdt(Signature::FADT).unwrap().unwrap() };
+            let fadt: acpi::PhysicalMapping<&Handler, acpi::fadt::Fadt> =
+                unsafe { table.get_sdt(Signature::FADT).unwrap().unwrap() };
 
-        let hpet = acpi::HpetInfo::new(&table).unwrap();
+            let hpet = acpi::HpetInfo::new(&table).unwrap();
 
-        Self {
-            platform_info,
-            fadt,
-            context,
-            hpet,
-        }
+            Mutex::new(Self {
+                platform_info,
+                fadt,
+                context,
+                hpet,
+            })
+        })
+        .unwrap();
     }
 
     pub fn local_apic_address(&self) -> PhysAddr {
@@ -96,7 +102,7 @@ impl<'a> Acpi<'a> {
 
     /// Get a reference to the acpi's fadt.
     #[must_use]
-    pub fn fadt(&self) -> &acpi::PhysicalMapping<&'a Handler, acpi::fadt::Fadt> {
+    pub fn fadt(&self) -> &acpi::PhysicalMapping<&'static Handler, acpi::fadt::Fadt> {
         &self.fadt
     }
 
@@ -108,7 +114,20 @@ impl<'a> Acpi<'a> {
             .get_by_path(&AmlName::from_str("\\_S5_").unwrap())
             .unwrap();
 
-        dbg!(shutdown);
+        let (a_value, b_value) = match shutdown {
+            AmlValue::Package(pkg) => {
+                let a_value = match pkg[0] {
+                    AmlValue::Integer(i) => i,
+                    _ => panic!("shutdown pm1a value not an integer"),
+                };
+                let b_value = match pkg[1] {
+                    AmlValue::Integer(i) => i,
+                    _ => panic!("shutdown pm1b value not an integer"),
+                };
+                (a_value, b_value)
+            }
+            _ => panic!("shutdown aml value is not a package: {:?}", shutdown),
+        };
 
         let mut args = aml::value::Args::EMPTY;
         args.store_arg(0, AmlValue::Integer(5)).unwrap();
@@ -123,12 +142,24 @@ impl<'a> Acpi<'a> {
             Err(e) => error!("shutdown error: {e:?}"),
         }
 
+        const SLEEP_EN: usize = 13;
+
         let pm1a_cnt = self.fadt.pm1a_control_block().unwrap();
         let pm1a_cnt = memory::translate_physical(pm1a_cnt.address);
-        let current_value: u16 = unsafe { *pm1a_cnt.as_ptr() };
-        println!("value: {:b}", current_value,);
+        let current_value: u16 = unsafe { pm1a_cnt.as_ptr::<u16>().read_volatile() };
         unsafe {
-            *pm1a_cnt.as_mut_ptr() = current_value | 6 << 10 | 1 << 13;
+            pm1a_cnt
+                .as_mut_ptr::<u16>()
+                .write_volatile(current_value | (a_value as u16) << 10 | 1 << SLEEP_EN);
+        }
+        if let Some(pm1b_cnt) = self.fadt.pm1b_control_block().unwrap() {
+            let pm1b_cnt = memory::translate_physical(pm1b_cnt.address);
+            let current_value: u16 = unsafe { pm1b_cnt.as_ptr::<u16>().read_volatile() };
+            unsafe {
+                pm1b_cnt
+                    .as_mut_ptr::<u16>()
+                    .write_volatile(current_value | (b_value as u16) << 10 | 1 << SLEEP_EN);
+            }
         }
     }
 
@@ -165,17 +196,6 @@ pub fn load_aml(dsdt: &[u8], pci_regions: acpi::PciConfigRegions) -> AmlContext 
     let mut context = AmlContext::new(Box::new(handler), aml::DebugVerbosity::None);
 
     context.parse_table(dsdt).unwrap();
-    //context.initialize_objects().unwrap();
-
-    // context
-    //     .namespace
-    //     .traverse(|name, level| {
-    //         if name.as_string() == "\\" {
-    //             serial_println!("{:#?}", &level.values);
-    //         }
-    //         Ok(false)
-    //     })
-    //     .unwrap();
 
     context
 }

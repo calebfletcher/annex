@@ -77,20 +77,23 @@ pub fn init(
 
     memory::MemoryManager::init(physical_memory_offset, mapper, frame_allocator);
 
-    let handler = acpi::Handler {};
-    let acpi = acpi::Acpi::init(&handler, rsdp_address);
-    debug!("acpi lapic addr {:p}", acpi.local_apic_address());
+    acpi::Acpi::init(rsdp_address);
+    debug!(
+        "acpi lapic addr {:p}",
+        acpi::ACPI.try_get().unwrap().lock().local_apic_address()
+    );
 
-    let apic_address = memory::translate_physical(acpi.local_apic_address());
+    let apic_address =
+        memory::translate_physical(acpi::ACPI.try_get().unwrap().lock().local_apic_address());
     apic::init(apic_address);
 
-    acpi.ioapic();
+    acpi::ACPI.try_get().unwrap().lock().ioapic();
     task::keyboard::init();
     cmos::RTC
-        .try_init_once(|| cmos::Rtc::new(acpi.fadt().century))
+        .try_init_once(|| cmos::Rtc::new(acpi::ACPI.try_get().unwrap().lock().fadt().century))
         .unwrap();
 
-    hpet::init(acpi.hpet());
+    hpet::init(acpi::ACPI.try_get().unwrap().lock().hpet());
 }
 
 fn init_terminal(screen: screen::Screen<'static>) {
