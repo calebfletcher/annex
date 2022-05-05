@@ -13,6 +13,8 @@ disk_image := out_dir + "/boot-" + mode + "-" + file_name(kernel_binary) + ".img
 
 is_test := if file_name(parent_directory(kernel_binary)) == "deps" { "true" } else { "false" }
 
+#qemu_bin := "/opt/qemu-7.0.0/build/qemu-system-x86_64"
+qemu_bin := "qemu-system-x86_64"
 qemu_args := "-machine q35 -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown -s " + mode_flags_qemu
 
 _default:
@@ -35,7 +37,7 @@ qemu-test:
     #!/usr/bin/env bash
     set -uxo pipefail
 
-    qemu-system-x86_64 \
+    {{qemu_bin}} \
         {{qemu_args}} \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -display none; (( $?==33 ))
@@ -47,12 +49,12 @@ qemu:
     if {{is_test}}; then
         timeout --foreground 60s just kernel_binary={{kernel_binary}} qemu-test
     else
-        qemu-system-x86_64 {{qemu_args}}
+        {{qemu_bin}} {{qemu_args}}
     fi    
 
 # Run QEMU but wait for debugger
 qemu-dbg: build
-    qemu-system-x86_64 {{qemu_args}} -S
+    {{qemu_bin}} {{qemu_args}} -S
 
 gdb:
     rust-gdb {{kernel_binary}} -ex "target remote :1234" -ex "b entry_point" -ex "c"
