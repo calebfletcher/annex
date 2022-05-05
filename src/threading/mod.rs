@@ -168,7 +168,9 @@ pub unsafe fn switch(to: usize) {
 
     // Get current thread
     let current_thread = threads.get_mut(&from).unwrap();
-    current_thread.set_state(ThreadState::ReadyToRun);
+    if current_thread.state() == &ThreadState::Running {
+        current_thread.set_state(ThreadState::ReadyToRun);
+    }
     let current_thread = current_thread as *const Thread;
 
     // Get next thread

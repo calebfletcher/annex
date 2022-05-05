@@ -8,7 +8,7 @@ use x86_64::{PhysAddr, VirtAddr};
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThreadState {
     Starting,
     Running,
