@@ -5,12 +5,12 @@ use core::{
 
 use alloc::{
     borrow::ToOwned,
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     vec::Vec,
 };
 
 use conquer_once::noblock::OnceCell;
-use log::error;
+use log::{error, warn};
 use spin::Mutex;
 use x86_64::{instructions::interrupts, registers::control::Cr3};
 
@@ -19,13 +19,14 @@ pub use thread::{Thread, ThreadState};
 
 use crate::hpet;
 
-use self::thread::{Stack, ThreadView};
+use self::thread::{BlockReason, Stack, ThreadView};
 
 /// Map between thread id and thread object
 static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
 static READY_THREADS: OnceCell<Mutex<VecDeque<usize>>> = OnceCell::uninit();
-pub static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
-pub static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
+static SLEEPING_THREADS: OnceCell<Mutex<BTreeMap<u64, BTreeSet<usize>>>> = OnceCell::uninit();
+static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
 static LAST_CONTEXT_SWITCH: AtomicU64 = AtomicU64::new(0);
 
 // Create a thread struct for the initial kernel thread that is running (id 0)
@@ -36,6 +37,7 @@ pub fn init() {
     let tcb = Thread::bootstrap(page_table);
 
     interrupts::disable();
+
     READY_THREADS
         .try_init_once(|| {
             let mut queue = VecDeque::new();
@@ -43,7 +45,13 @@ pub fn init() {
             Mutex::new(queue)
         })
         .unwrap();
+
+    SLEEPING_THREADS
+        .try_init_once(|| Mutex::new(BTreeMap::new()))
+        .unwrap();
+
     THREADS.lock().insert(tcb.id(), tcb);
+
     interrupts::enable();
 }
 
@@ -82,10 +90,10 @@ pub fn start() {
     SCHEDULER_ENABLED.store(true, Ordering::Release);
 }
 
-pub fn schedule() {
-    interrupts::disable();
-    unsafe { update_time_used() };
-
+/// # Safety
+/// Interrupts must be disabled before calling this function, and the scheduler
+/// must be unlocked.
+pub unsafe fn schedule() {
     if !SCHEDULER_ENABLED.load(Ordering::Acquire) {
         return;
     }
@@ -99,12 +107,20 @@ pub fn schedule() {
             switch(next_id);
         },
         None => {
-            // TODO: this currently breaks if there is no idle task
-            error!("no threads available to be scheduled");
+            match THREADS
+                .lock()
+                .get_mut(&ACTIVE_THREAD_ID.load(Ordering::Acquire))
+            {
+                Some(tcb) if tcb.state() == &ThreadState::Running => {
+                    // Current thread still wants to run, so let it
+                }
+                _ => {
+                    // TODO: this currently breaks if there is no idle task
+                    error!("no threads available to be scheduled");
+                }
+            }
         }
     }
-
-    interrupts::enable();
 }
 
 /// # Safety
@@ -161,6 +177,8 @@ pub unsafe extern "C" fn switch_to_thread(
 /// Interrupts must be disabled before calling this function, and the
 /// scheduler lock must be unlocked.
 pub unsafe fn switch(to: usize) {
+    unsafe { update_time_used() };
+
     let from = ACTIVE_THREAD_ID.load(Ordering::SeqCst);
 
     let mut threads = THREADS.lock();
@@ -201,4 +219,55 @@ unsafe fn update_time_used() {
     {
         tcb.add_time(elapsed);
     }
+}
+
+pub fn block_current_thread(reason: BlockReason) {
+    interrupts::disable();
+
+    if let Some(tcb) = THREADS
+        .lock()
+        .get_mut(&ACTIVE_THREAD_ID.load(Ordering::Acquire))
+    {
+        // Add task to blocked list
+        #[allow(clippy::single_match)]
+        match reason {
+            BlockReason::Sleep(deadline) => {
+                let mut sleeping_threads = SLEEPING_THREADS.try_get().unwrap().lock();
+                let entry = sleeping_threads.entry(deadline);
+                entry.or_default().insert(tcb.id());
+            }
+
+            _ => {
+                //warn!("no thread list defined for {:?}", reason);
+            }
+        }
+
+        tcb.set_state(ThreadState::Blocked(reason));
+    }
+
+    // TODO: make is to this schedule call can be done. Currently, schedule()
+    // requires interrupts to be enabled, but if we call this after enabling
+    // then there could be a race condition where the schedule call happens
+    // immediately after an interrupt-based schedule.
+    //unsafe { schedule() };
+
+    interrupts::enable();
+}
+
+pub fn unblock_thread(id: usize) {
+    interrupts::disable();
+
+    let _next_id = if let Some(tcb) = THREADS.lock().get_mut(&id) {
+        tcb.set_state(ThreadState::ReadyToRun);
+        READY_THREADS.try_get().unwrap().lock().push_back(tcb.id());
+        tcb.id()
+    } else {
+        warn!("attempted to unblock a thread which is not blocked");
+        return;
+    };
+
+    // TODO: potentially switch to the unblocked task now iff there is only one
+    // active task (since it presumably got a lot of CPU time)
+
+    interrupts::enable();
 }

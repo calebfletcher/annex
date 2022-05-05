@@ -12,7 +12,7 @@ use core::arch::asm;
 use annex::{
     println, screen,
     task::{executor::Executor, Task},
-    threading,
+    threading::{self, thread::BlockReason},
 };
 use log::info;
 use x86_64::{instructions::interrupts, PhysAddr, VirtAddr};
@@ -61,8 +61,18 @@ fn task2() -> ! {
             asm! {
                 "
                 mov dx, 0x3F8
+                mov al, 0x41
+                out dx, al
+            ",
+            }
+        };
+        threading::block_current_thread(BlockReason::Other);
+        unsafe {
+            asm! {
+                "
+                mov dx, 0x3F8
                 mov al, 0x42
-                //out dx, al
+                out dx, al
             ",
             }
         };

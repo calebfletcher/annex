@@ -13,7 +13,14 @@ pub enum ThreadState {
     Starting,
     Running,
     ReadyToRun,
-    Blocked,
+    Blocked(BlockReason),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockReason {
+    // How long to sleep
+    Sleep(u64),
+    Other,
 }
 
 #[derive(Debug)]
@@ -22,6 +29,8 @@ pub struct Thread {
     id: usize,
     stack_top: VirtAddr,
     page_table: PhysAddr,
+
+    // Items below should not be accessed from assembly
     state: ThreadState,
     name: String,
     stack: Option<Stack>,

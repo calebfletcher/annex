@@ -55,7 +55,7 @@ extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: Interr
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe { apic::LAPIC.try_get().unwrap().lock().end_of_interrupt() };
 
-    threading::schedule();
+    unsafe { threading::schedule() };
 }
 
 extern "x86-interrupt" fn invalid_tss_handler(stack_frame: InterruptStackFrame, code: u64) {
