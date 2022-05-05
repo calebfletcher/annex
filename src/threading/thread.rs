@@ -25,6 +25,7 @@ pub struct Thread {
     state: ThreadState,
     name: String,
     stack: Option<Stack>,
+    time: u64,
 }
 
 impl Thread {
@@ -36,6 +37,7 @@ impl Thread {
             state: ThreadState::Starting,
             name,
             stack: Some(stack),
+            time: 0,
         }
     }
 
@@ -53,6 +55,7 @@ impl Thread {
             state: ThreadState::Running,
             name: "kernel".to_owned(),
             stack: None,
+            time: 0,
         }
     }
 
@@ -91,7 +94,13 @@ impl Thread {
                 .stack
                 .as_ref()
                 .map(|stack| self.stack_top + stack.buffer.len()),
+            time: self.time,
         }
+    }
+
+    /// Add to the thread's time in nanoseconds.
+    pub fn add_time(&mut self, value: u64) {
+        self.time += value;
     }
 }
 
@@ -155,6 +164,7 @@ pub struct ThreadView {
     name: String,
     stack_size: Option<usize>,
     stack_bottom: Option<VirtAddr>,
+    time: u64,
 }
 
 impl ThreadView {
@@ -198,5 +208,11 @@ impl ThreadView {
     #[must_use]
     pub fn stack_bottom(&self) -> Option<VirtAddr> {
         self.stack_bottom
+    }
+
+    /// Get the thread view's time.
+    #[must_use]
+    pub fn time(&self) -> u64 {
+        self.time
     }
 }

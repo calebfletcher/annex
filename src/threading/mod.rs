@@ -1,6 +1,6 @@
 use core::{
     arch::asm,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
 };
 
 use alloc::{borrow::ToOwned, collections::BTreeMap, vec::Vec};
@@ -12,12 +12,15 @@ use x86_64::{instructions::interrupts, registers::control::Cr3};
 pub mod thread;
 pub use thread::{Thread, ThreadState};
 
+use crate::hpet;
+
 use self::thread::{Stack, ThreadView};
 
 /// Map between thread id and thread object
 static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
 pub static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 pub static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
+static LAST_CONTEXT_SWITCH: AtomicU64 = AtomicU64::new(0);
 
 // Create a thread struct for the initial kernel thread that is running (id 0)
 pub fn init() {
@@ -71,6 +74,8 @@ pub fn schedule() {
     if !SCHEDULER_ENABLED.load(Ordering::Acquire) {
         return;
     }
+
+    unsafe { update_time_used() };
 
     let threads = THREADS.lock();
 
@@ -174,4 +179,20 @@ pub unsafe fn switch(to: usize) {
     drop(threads);
 
     unsafe { switch_to_thread(ACTIVE_THREAD_ID.as_mut_ptr(), current_thread, next_thread) };
+}
+
+/// # Safety
+/// Interrupts must be disabled before calling this function, and the
+/// scheduler lock must be unlocked.
+unsafe fn update_time_used() {
+    let current_time = hpet::nanoseconds();
+    let elapsed = current_time - LAST_CONTEXT_SWITCH.load(Ordering::Acquire);
+    LAST_CONTEXT_SWITCH.store(current_time, Ordering::Release);
+
+    if let Some(tcb) = THREADS
+        .lock()
+        .get_mut(&ACTIVE_THREAD_ID.load(Ordering::Acquire))
+    {
+        tcb.add_time(elapsed);
+    }
 }

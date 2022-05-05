@@ -76,7 +76,14 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
             let threads = threading::threads();
 
             for thread in threads.iter() {
-                println!("{} | {} | {:?}", thread.id(), thread.name(), thread.state());
+                let time = thread.time() as f64 / 1e9;
+                println!(
+                    "{} | {} | {:?} | {:.3}s",
+                    thread.id(),
+                    thread.name(),
+                    thread.state(),
+                    time
+                );
             }
         }
         _ => println!("unknown command: {}", cmd),
