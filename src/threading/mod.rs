@@ -3,8 +3,13 @@ use core::{
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
 };
 
-use alloc::{borrow::ToOwned, collections::BTreeMap, vec::Vec};
+use alloc::{
+    borrow::ToOwned,
+    collections::{BTreeMap, VecDeque},
+    vec::Vec,
+};
 
+use conquer_once::noblock::OnceCell;
 use log::error;
 use spin::Mutex;
 use x86_64::{instructions::interrupts, registers::control::Cr3};
@@ -18,6 +23,7 @@ use self::thread::{Stack, ThreadView};
 
 /// Map between thread id and thread object
 static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
+static READY_THREADS: OnceCell<Mutex<VecDeque<usize>>> = OnceCell::uninit();
 pub static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 pub static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
 static LAST_CONTEXT_SWITCH: AtomicU64 = AtomicU64::new(0);
@@ -30,6 +36,13 @@ pub fn init() {
     let tcb = Thread::bootstrap(page_table);
 
     interrupts::disable();
+    READY_THREADS
+        .try_init_once(|| {
+            let mut queue = VecDeque::new();
+            queue.push_back(tcb.id());
+            Mutex::new(queue)
+        })
+        .unwrap();
     THREADS.lock().insert(tcb.id(), tcb);
     interrupts::enable();
 }
@@ -49,6 +62,7 @@ pub fn add_thread(entry: fn() -> !, stack_size: usize) {
         stack,
     );
     interrupts::disable();
+    READY_THREADS.try_get().unwrap().lock().push_back(tcb.id());
     THREADS.lock().insert(tcb.id(), tcb);
     interrupts::enable();
 }
@@ -70,30 +84,14 @@ pub fn start() {
 
 pub fn schedule() {
     interrupts::disable();
+    unsafe { update_time_used() };
 
     if !SCHEDULER_ENABLED.load(Ordering::Acquire) {
         return;
     }
 
-    unsafe { update_time_used() };
-
-    let threads = THREADS.lock();
-
     // Round robin scheduler
-    let current_id = ACTIVE_THREAD_ID.load(Ordering::Acquire);
-
-    // Create an iterator
-    let mut thread_iter = threads.iter();
-    let _ = thread_iter.find(|(_, tcb)| tcb.id() == current_id);
-
-    // Either get the next thread in the list, or wrap back around to the start
-    let next_id = match thread_iter.next() {
-        Some((&next_id, _next_tcb)) => Some(next_id),
-        None => threads.first_key_value().map(|(&id, _tcb)| id),
-    };
-
-    // Drop mutex lock
-    drop(threads);
+    let next_id = READY_THREADS.try_get().unwrap().lock().pop_front();
 
     // If there was a thread, switch to it
     match next_id {
@@ -101,6 +99,7 @@ pub fn schedule() {
             switch(next_id);
         },
         None => {
+            // TODO: this currently breaks if there is no idle task
             error!("no threads available to be scheduled");
         }
     }
@@ -170,6 +169,11 @@ pub unsafe fn switch(to: usize) {
     let current_thread = threads.get_mut(&from).unwrap();
     if current_thread.state() == &ThreadState::Running {
         current_thread.set_state(ThreadState::ReadyToRun);
+        READY_THREADS
+            .try_get()
+            .unwrap()
+            .lock()
+            .push_back(current_thread.id());
     }
     let current_thread = current_thread as *const Thread;
 
