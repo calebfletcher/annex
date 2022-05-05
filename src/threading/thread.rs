@@ -8,7 +8,7 @@ use x86_64::{PhysAddr, VirtAddr};
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ThreadState {
     Starting,
     Running,
@@ -50,7 +50,7 @@ impl Thread {
             id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
             stack_top: VirtAddr::zero(),
             page_table,
-            state: ThreadState::Starting,
+            state: ThreadState::Running,
             name: "kernel".to_owned(),
             stack: None,
         }
@@ -77,6 +77,21 @@ impl Thread {
     #[must_use]
     pub fn name(&self) -> &str {
         self.name.as_ref()
+    }
+
+    pub fn to_view(&self) -> ThreadView {
+        ThreadView {
+            id: self.id,
+            stack_top: self.stack_top,
+            page_table: self.page_table,
+            state: self.state.clone(),
+            name: self.name.clone(),
+            stack_size: self.stack.as_ref().map(|stack| stack.buffer.len()),
+            stack_bottom: self
+                .stack
+                .as_ref()
+                .map(|stack| self.stack_top + stack.buffer.len()),
+        }
     }
 }
 
@@ -127,5 +142,61 @@ impl Stack {
         let stack_pointer = unsafe { (&self.buffer[self.buffer.len() - 1] as *const u64).sub(5) };
 
         VirtAddr::new(stack_pointer as u64)
+    }
+}
+
+/// A view into a thread, that cannot be scheduled itself
+#[derive(Debug, Clone)]
+pub struct ThreadView {
+    id: usize,
+    stack_top: VirtAddr,
+    page_table: PhysAddr,
+    state: ThreadState,
+    name: String,
+    stack_size: Option<usize>,
+    stack_bottom: Option<VirtAddr>,
+}
+
+impl ThreadView {
+    /// Get the thread view's id.
+    #[must_use]
+    pub fn id(&self) -> usize {
+        self.id
+    }
+
+    /// Get the thread view's stack top.
+    #[must_use]
+    pub fn stack_top(&self) -> VirtAddr {
+        self.stack_top
+    }
+
+    /// Get the thread view's page table.
+    #[must_use]
+    pub fn page_table(&self) -> PhysAddr {
+        self.page_table
+    }
+
+    /// Get a reference to the thread view's state.
+    #[must_use]
+    pub fn state(&self) -> &ThreadState {
+        &self.state
+    }
+
+    /// Get a reference to the thread view's name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+
+    /// Get the thread view's stack size.
+    #[must_use]
+    pub fn stack_size(&self) -> Option<usize> {
+        self.stack_size
+    }
+
+    /// Get the thread view's stack bottom.
+    #[must_use]
+    pub fn stack_bottom(&self) -> Option<VirtAddr> {
+        self.stack_bottom
     }
 }

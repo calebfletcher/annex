@@ -3,7 +3,7 @@ use core::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use alloc::{borrow::ToOwned, collections::BTreeMap};
+use alloc::{borrow::ToOwned, collections::BTreeMap, vec::Vec};
 
 use log::error;
 use spin::Mutex;
@@ -12,7 +12,7 @@ use x86_64::{instructions::interrupts, registers::control::Cr3};
 pub mod thread;
 pub use thread::{Thread, ThreadState};
 
-use self::thread::Stack;
+use self::thread::{Stack, ThreadView};
 
 /// Map between thread id and thread object
 static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
@@ -25,7 +25,10 @@ pub fn init() {
     let page_table = page_table.start_address();
 
     let tcb = Thread::bootstrap(page_table);
+
+    interrupts::disable();
     THREADS.lock().insert(tcb.id(), tcb);
+    interrupts::enable();
 }
 
 pub fn add_thread(entry: fn() -> !, stack_size: usize) {
@@ -42,7 +45,20 @@ pub fn add_thread(entry: fn() -> !, stack_size: usize) {
         "kernel2".to_owned(),
         stack,
     );
+    interrupts::disable();
     THREADS.lock().insert(tcb.id(), tcb);
+    interrupts::enable();
+}
+
+/// Get a copy of the list of threads
+pub fn threads() -> Vec<ThreadView> {
+    interrupts::disable();
+
+    let view: Vec<ThreadView> = THREADS.lock().values().map(|tcb| tcb.to_view()).collect();
+
+    interrupts::enable();
+
+    view
 }
 
 pub fn start() {
@@ -143,9 +159,18 @@ pub unsafe extern "C" fn switch_to_thread(
 pub unsafe fn switch(to: usize) {
     let from = ACTIVE_THREAD_ID.load(Ordering::SeqCst);
 
-    let threads = THREADS.lock();
-    let current_thread = threads.get(&from).unwrap() as *const Thread;
-    let next_thread = threads.get(&to).unwrap() as *const Thread;
+    let mut threads = THREADS.lock();
+
+    // Get current thread
+    let current_thread = threads.get_mut(&from).unwrap();
+    current_thread.set_state(ThreadState::ReadyToRun);
+    let current_thread = current_thread as *const Thread;
+
+    // Get next thread
+    let next_thread = threads.get_mut(&to).unwrap();
+    next_thread.set_state(ThreadState::Running);
+    let next_thread = next_thread as *const Thread;
+
     drop(threads);
 
     unsafe { switch_to_thread(ACTIVE_THREAD_ID.as_mut_ptr(), current_thread, next_thread) };

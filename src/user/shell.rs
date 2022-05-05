@@ -1,6 +1,6 @@
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-use crate::{acpi, cmos, emulators, hpet, print, println, task::keyboard};
+use crate::{acpi, cmos, emulators, hpet, print, println, task::keyboard, threading};
 
 use super::line_edit;
 
@@ -72,6 +72,13 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
             println!("shutdown currently not working");
             acpi::ACPI.try_get().unwrap().try_lock().unwrap().shutdown();
         }
+        "ps" | "processes" => {
+            let threads = threading::threads();
+
+            for thread in threads.iter() {
+                println!("{} | {} | {:?}", thread.id(), thread.name(), thread.state());
+            }
+        }
         _ => println!("unknown command: {}", cmd),
     }
 }
@@ -85,4 +92,5 @@ fn display_help() {
     println!("  ts - get time since boot");
     println!("  quit - exit vm");
     println!("  shutdown - shutdown hardware");
+    println!("  processes - show process info");
 }
