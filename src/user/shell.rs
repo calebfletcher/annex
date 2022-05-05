@@ -1,6 +1,6 @@
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-use crate::{cmos, emulators, hpet, print, println, task::keyboard};
+use crate::{acpi, cmos, emulators, hpet, print, println, task::keyboard};
 
 use super::line_edit;
 
@@ -78,10 +78,11 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
 
 fn display_help() {
     println!("Commands:");
-    println!("  help");
-    println!("  clear");
-    println!("  history");
-    println!("  time");
-    println!("  ts");
-    println!("  quit");
+    println!("  help - display this list");
+    println!("  clear - clear screen");
+    println!("  history - shell history");
+    println!("  time - get wall time");
+    println!("  ts - get time since boot");
+    println!("  quit - exit vm");
+    println!("  shutdown - shutdown hardware");
 }
