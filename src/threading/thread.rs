@@ -6,7 +6,24 @@ use core::{
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec};
 use x86_64::{PhysAddr, VirtAddr};
 
-static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct ThreadId(usize);
+
+impl ThreadId {
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+
+    pub fn from_usize(id: usize) -> Self {
+        Self(id)
+    }
+
+    fn new() -> Self {
+        static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+        ThreadId(NEXT_THREAD_ID.fetch_add(1, Ordering::SeqCst))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThreadState {
@@ -26,7 +43,7 @@ pub enum BlockReason {
 #[derive(Debug)]
 #[repr(C)]
 pub struct Thread {
-    id: usize,
+    id: ThreadId,
     stack_top: VirtAddr,
     page_table: PhysAddr,
 
@@ -40,7 +57,7 @@ pub struct Thread {
 impl Thread {
     pub fn new(stack_top: VirtAddr, page_table: PhysAddr, name: String, stack: Stack) -> Self {
         Self {
-            id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
+            id: ThreadId::new(),
             stack_top,
             page_table,
             state: ThreadState::Starting,
@@ -58,7 +75,7 @@ impl Thread {
     /// if the thread ever gets deleted (which it won't)
     pub fn bootstrap(page_table: PhysAddr) -> Self {
         Self {
-            id: NEXT_THREAD_ID.fetch_add(1, Ordering::AcqRel),
+            id: ThreadId::new(),
             stack_top: VirtAddr::zero(),
             page_table,
             state: ThreadState::Running,
@@ -70,7 +87,7 @@ impl Thread {
 
     /// Get the thread's id.
     #[must_use]
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> ThreadId {
         self.id
     }
 
@@ -166,7 +183,7 @@ impl Stack {
 /// A view into a thread, that cannot be scheduled itself
 #[derive(Debug, Clone)]
 pub struct ThreadView {
-    id: usize,
+    id: ThreadId,
     stack_top: VirtAddr,
     page_table: PhysAddr,
     state: ThreadState,
@@ -179,7 +196,7 @@ pub struct ThreadView {
 impl ThreadView {
     /// Get the thread view's id.
     #[must_use]
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> ThreadId {
         self.id
     }
 

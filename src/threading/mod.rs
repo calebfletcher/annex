@@ -19,12 +19,12 @@ pub use thread::{Thread, ThreadState};
 
 use crate::hpet;
 
-use self::thread::{BlockReason, Stack, ThreadView};
+use self::thread::{BlockReason, Stack, ThreadId, ThreadView};
 
 /// Map between thread id and thread object
-static THREADS: Mutex<BTreeMap<usize, Thread>> = Mutex::new(BTreeMap::new());
-static READY_THREADS: OnceCell<Mutex<VecDeque<usize>>> = OnceCell::uninit();
-static SLEEPING_THREADS: OnceCell<Mutex<BTreeMap<u64, BTreeSet<usize>>>> = OnceCell::uninit();
+static THREADS: Mutex<BTreeMap<ThreadId, Thread>> = Mutex::new(BTreeMap::new());
+static READY_THREADS: OnceCell<Mutex<VecDeque<ThreadId>>> = OnceCell::uninit();
+static SLEEPING_THREADS: OnceCell<Mutex<BTreeMap<u64, BTreeSet<ThreadId>>>> = OnceCell::uninit();
 static ACTIVE_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 static SCHEDULER_ENABLED: AtomicBool = AtomicBool::new(false);
 static LAST_CONTEXT_SWITCH: AtomicU64 = AtomicU64::new(0);
@@ -107,10 +107,9 @@ pub unsafe fn schedule() {
             switch(next_id);
         },
         None => {
-            match THREADS
-                .lock()
-                .get_mut(&ACTIVE_THREAD_ID.load(Ordering::Acquire))
-            {
+            match THREADS.lock().get_mut(&ThreadId::from_usize(
+                ACTIVE_THREAD_ID.load(Ordering::Acquire),
+            )) {
                 Some(tcb) if tcb.state() == &ThreadState::Running => {
                     // Current thread still wants to run, so let it
                 }
@@ -176,10 +175,10 @@ pub unsafe extern "C" fn switch_to_thread(
 /// # Safety
 /// Interrupts must be disabled before calling this function, and the
 /// scheduler lock must be unlocked.
-pub unsafe fn switch(to: usize) {
+pub unsafe fn switch(to: ThreadId) {
     unsafe { update_time_used() };
 
-    let from = ACTIVE_THREAD_ID.load(Ordering::SeqCst);
+    let from = ThreadId::from_usize(ACTIVE_THREAD_ID.load(Ordering::Acquire));
 
     let mut threads = THREADS.lock();
 
@@ -213,10 +212,9 @@ unsafe fn update_time_used() {
     let elapsed = current_time - LAST_CONTEXT_SWITCH.load(Ordering::Acquire);
     LAST_CONTEXT_SWITCH.store(current_time, Ordering::Release);
 
-    if let Some(tcb) = THREADS
-        .lock()
-        .get_mut(&ACTIVE_THREAD_ID.load(Ordering::Acquire))
-    {
+    if let Some(tcb) = THREADS.lock().get_mut(&ThreadId::from_usize(
+        ACTIVE_THREAD_ID.load(Ordering::Acquire),
+    )) {
         tcb.add_time(elapsed);
     }
 }
@@ -224,10 +222,9 @@ unsafe fn update_time_used() {
 pub fn block_current_thread(reason: BlockReason) {
     interrupts::disable();
 
-    if let Some(tcb) = THREADS
-        .lock()
-        .get_mut(&ACTIVE_THREAD_ID.load(Ordering::Acquire))
-    {
+    if let Some(tcb) = THREADS.lock().get_mut(&ThreadId::from_usize(
+        ACTIVE_THREAD_ID.load(Ordering::Acquire),
+    )) {
         // Add task to blocked list
         #[allow(clippy::single_match)]
         match reason {
@@ -257,7 +254,7 @@ pub fn block_current_thread(reason: BlockReason) {
 pub fn unblock_thread(id: usize) {
     interrupts::disable();
 
-    let _next_id = if let Some(tcb) = THREADS.lock().get_mut(&id) {
+    let _next_id = if let Some(tcb) = THREADS.lock().get_mut(&ThreadId::from_usize(id)) {
         tcb.set_state(ThreadState::ReadyToRun);
         READY_THREADS.try_get().unwrap().lock().push_back(tcb.id());
         tcb.id()

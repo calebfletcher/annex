@@ -78,7 +78,7 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
             for thread in threads.iter() {
                 let time = thread.time() as f64 / 1e9;
                 println!(
-                    "{} | {} | {:?} | {:.3}s",
+                    "{:?} | {} | {:?} | {:.3}s",
                     thread.id(),
                     thread.name(),
                     thread.state(),
