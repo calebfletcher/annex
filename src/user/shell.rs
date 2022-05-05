@@ -66,7 +66,7 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
             emulators::exit_qemu(emulators::QemuExitCode::Success);
         }
         "ts" => {
-            println!("ts {} {}", hpet::get(), hpet::get_seconds());
+            println!("time since boot: {:.3} s", hpet::seconds());
         }
         _ => println!("unknown command: {}", cmd),
     }
@@ -78,4 +78,6 @@ fn display_help() {
     println!("  clear");
     println!("  history");
     println!("  time");
+    println!("  ts");
+    println!("  quit");
 }

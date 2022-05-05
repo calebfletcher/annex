@@ -11,9 +11,11 @@ static HPET: OnceCell<Hpet> = OnceCell::uninit();
 pub struct Hpet {
     base_address: VirtAddr,
 
-    /// Clock period in femtoseconds (1e-15s)
-    clock_period: u64,
+    /// Clock period in nanoseconds (1e-12s)
+    clock_period_ns: u64,
 }
+
+const HPET_ENABLE_CNF: usize = 0;
 
 pub fn init(info: &HpetInfo) {
     HPET.try_init_once(|| {
@@ -25,24 +27,48 @@ pub fn init(info: &HpetInfo) {
 
         let capabilities: u64 = unsafe { *base_address.as_ptr() };
 
-        let clock_period = capabilities.get_bits(32..64);
+        let clock_period_fs = capabilities.get_bits(32..63);
+        let clock_period_ns = clock_period_fs / 1_000_000;
 
-        //unsafe { *base_address.as_mut_ptr().add(2) =  }
+        debug!("hpet period: {} ns", clock_period_ns);
+
+        if !capabilities.get_bit(13) {
+            debug!("hpet is not 64 bit");
+        }
+
+        // Enable HPET
+        let mut configuration: u64 = unsafe {
+            base_address
+                .as_mut_ptr::<u64>()
+                .add(0x10 >> 3)
+                .read_volatile()
+        };
+        configuration.set_bit(HPET_ENABLE_CNF, true);
+        unsafe {
+            base_address
+                .as_mut_ptr::<u64>()
+                .add(0x10 >> 3)
+                .write_volatile(configuration)
+        };
 
         Hpet {
             base_address,
-            clock_period,
+            clock_period_ns,
         }
     })
     .unwrap();
 }
 
-pub fn get() -> u64 {
-    let base: *const u64 = HPET.try_get().unwrap().base_address.as_ptr();
-    unsafe { *base.add(30) }
+/// Get the counter value in nanoseconds
+pub fn nanoseconds() -> u64 {
+    let hpet = HPET.try_get().unwrap();
+    let base: *const u64 = hpet.base_address.as_ptr();
+    let ticks = unsafe { base.add(0xF0 >> 3).read_volatile() };
+    ticks * hpet.clock_period_ns
 }
 
-pub fn get_seconds() -> f64 {
-    let femto = get();
-    femto as f64 / HPET.try_get().unwrap().clock_period as f64
+/// Get the counter value in seconds
+pub fn seconds() -> f64 {
+    let ns = nanoseconds();
+    ns as f64 / 1e9
 }
