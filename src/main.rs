@@ -7,12 +7,10 @@
 
 extern crate alloc;
 
-use core::arch::asm;
-
 use annex::{
     println, screen,
     task::{executor::Executor, Task},
-    threading::{self, thread::BlockReason},
+    threading,
 };
 use log::info;
 use x86_64::{instructions::interrupts, PhysAddr, VirtAddr};
@@ -41,9 +39,7 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-    threading::init();
-    threading::add_thread(task2, 4096);
-    threading::start();
+    threading::scheduler::with_scheduler(|s| s.add_paused_thread("dummy", task2, 4096));
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
@@ -57,25 +53,25 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 fn task2() -> ! {
     interrupts::enable();
     loop {
-        unsafe {
-            asm! {
-                "
-                mov dx, 0x3F8
-                mov al, 0x41
-                out dx, al
-            ",
-            }
-        };
-        threading::block_current_thread(BlockReason::Other);
-        unsafe {
-            asm! {
-                "
-                mov dx, 0x3F8
-                mov al, 0x42
-                out dx, al
-            ",
-            }
-        };
+        // unsafe {
+        //     asm! {
+        //         "
+        //         mov dx, 0x3F8
+        //         mov al, 0x41
+        //         out dx, al
+        //     ",
+        //     }
+        // };
+        // //threading::block_current_thread(BlockReason::Other);
+        // unsafe {
+        //     asm! {
+        //         "
+        //         mov dx, 0x3F8
+        //         mov al, 0x42
+        //         out dx, al
+        //     ",
+        //     }
+        // };
     }
 }
 

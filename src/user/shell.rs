@@ -73,7 +73,7 @@ async fn run_command(cmd: &str, _args: Option<&str>, history: &[String]) {
             acpi::ACPI.try_get().unwrap().try_lock().unwrap().shutdown();
         }
         "ps" | "processes" => {
-            let threads = threading::threads();
+            let threads = threading::scheduler::with_scheduler(|s| s.to_view());
 
             for thread in threads.iter() {
                 let time = thread.time() as f64 / 1e9;
