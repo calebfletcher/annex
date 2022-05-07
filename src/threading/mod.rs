@@ -4,12 +4,10 @@ pub mod scheduler;
 pub mod thread;
 pub use thread::{Thread, ThreadState};
 
-use crate::serial_println;
-
 use self::thread::ThreadId;
 
 /// # Safety
-/// Interrupts must be disabled before calling this function
+/// Supplied pointers must be valid threads.
 #[naked]
 pub unsafe extern "C" fn switch_to_thread(from_tcb: *const Thread, to_tcb: *const Thread) {
     unsafe {
@@ -62,6 +60,17 @@ pub unsafe fn switch(from: ThreadId, to: ThreadId) {
         unsafe { scheduler::with_scheduler_from_irq(|s| s.thread_pointers(from, to)) };
 
     unsafe { switch_to_thread(current_thread, next_thread) };
+}
+
+pub fn yield_now() {
+    unsafe {
+        if let Some((prev_thread, next_thread)) = scheduler::with_scheduler(|s| {
+            s.schedule()
+                .map(|(from_id, next_id)| s.thread_pointers(from_id, next_id))
+        }) {
+            switch_to_thread(prev_thread, next_thread);
+        }
+    };
 }
 
 // pub fn block_current_thread(reason: BlockReason) {

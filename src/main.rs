@@ -13,7 +13,10 @@ use annex::{
     threading,
 };
 use log::info;
-use x86_64::{instructions::interrupts, PhysAddr, VirtAddr};
+use x86_64::{
+    instructions::{self, interrupts},
+    PhysAddr, VirtAddr,
+};
 
 mod panic;
 
@@ -39,40 +42,32 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-    threading::scheduler::with_scheduler(|s| s.add_paused_thread("dummy", task2, 4096));
+    threading::scheduler::with_scheduler(|s| {
+        s.set_idle_thread(task_idle, 4096);
+        s.add_paused_thread("async", task_async_executor, 4096);
+        s.set_active(true);
+    });
+
+    println!("loaded kernel");
+    loop {}
+}
+
+fn task_idle() -> ! {
+    interrupts::enable();
+    loop {
+        instructions::hlt();
+        threading::yield_now();
+    }
+}
+
+fn task_async_executor() -> ! {
+    interrupts::enable();
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
     executor.spawn(Task::new(annex::user::shell::run()));
 
-    println!("loaded kernel");
-
     executor.run();
-}
-
-fn task2() -> ! {
-    interrupts::enable();
-    loop {
-        // unsafe {
-        //     asm! {
-        //         "
-        //         mov dx, 0x3F8
-        //         mov al, 0x41
-        //         out dx, al
-        //     ",
-        //     }
-        // };
-        // //threading::block_current_thread(BlockReason::Other);
-        // unsafe {
-        //     asm! {
-        //         "
-        //         mov dx, 0x3F8
-        //         mov al, 0x42
-        //         out dx, al
-        //     ",
-        //     }
-        // };
-    }
 }
 
 #[test_case]

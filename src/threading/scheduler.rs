@@ -18,6 +18,9 @@ use super::{
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 
 pub struct Scheduler {
+    /// Whether the scheduler is currently active
+    active: bool,
+
     /// A mapping between threads and their control blocks
     threads: BTreeMap<ThreadId, Thread>,
 
@@ -51,12 +54,13 @@ impl Scheduler {
         threads.insert(root_id, tcb);
 
         Self {
+            active: false,
             threads,
             idle_thread_id: None,
             current_thread_id: root_id,
             paused_threads: VecDeque::new(),
             blocked_threads: BTreeSet::new(),
-            last_accounting_update: hpet::nanoseconds(),
+            last_accounting_update: 0,
         }
     }
 
@@ -81,6 +85,27 @@ impl Scheduler {
         // Add thread to the scheduler data structures
         self.threads.insert(thread_id, tcb);
         self.paused_threads.push_back(thread_id);
+    }
+
+    pub fn set_idle_thread(&mut self, entrypoint: fn() -> !, stack_size: usize) {
+        // Get address to kernel's page table
+        let (page_table, _) = Cr3::read();
+        let page_table = page_table.start_address();
+
+        // Create and initialise a new stack for this thread
+        let stack = Stack::new(stack_size, entrypoint);
+
+        // Add a new thread to the list
+        let mut thread = Thread::new(
+            stack.initial_stack_pointer(),
+            page_table,
+            "idle".to_owned(),
+            stack,
+        );
+        thread.set_state(ThreadState::ReadyToRun);
+
+        self.idle_thread_id = Some(thread.id());
+        self.threads.insert(thread.id(), thread);
     }
 
     /// Get a view into the current threads in the scheduler.
@@ -114,6 +139,10 @@ impl Scheduler {
     }
 
     pub fn schedule(&mut self) -> Option<(ThreadId, ThreadId)> {
+        if !self.active() {
+            return None;
+        }
+
         self.update_time_used();
 
         // Get next thread with round robin scheduler
@@ -159,6 +188,18 @@ impl Scheduler {
             .get_mut(&self.current_thread_id)
             .unwrap()
             .add_time(elapsed);
+    }
+
+    /// Set the scheduler's active state.
+    pub fn set_active(&mut self, active: bool) {
+        self.active = active;
+        self.last_accounting_update = hpet::nanoseconds();
+    }
+
+    /// Get the scheduler's active state.
+    #[must_use]
+    pub fn active(&self) -> bool {
+        self.active
     }
 }
 
