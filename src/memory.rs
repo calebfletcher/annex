@@ -1,4 +1,4 @@
-use alloc::{format, string::String};
+use alloc::{format, string::String, vec::Vec};
 use bootloader::boot_info::{MemoryRegionKind, MemoryRegions};
 use conquer_once::noblock::OnceCell;
 use log::warn;
@@ -6,11 +6,13 @@ use spin::Mutex;
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
-        FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame,
-        Size4KiB,
+        FrameAllocator, Mapper, OffsetPageTable, Page, PageSize, PageTable, PageTableFlags,
+        PhysFrame, Size2MiB, Size4KiB,
     },
     PhysAddr, VirtAddr,
 };
+
+use crate::serial_println;
 
 /// Returns a mutable reference to the active level 4 table.
 ///
@@ -156,6 +158,139 @@ pub fn manager<'a>() -> spin::MutexGuard<'a, MemoryManager> {
 
 pub fn translate_physical(addr: impl AsU64) -> VirtAddr {
     *PHYSICAL_OFFSET.try_get().unwrap() + addr.as_u64()
+}
+
+struct Mapping {
+    virt: VirtAddr,
+    physical: PhysAddr,
+    length: u64,
+}
+
+pub fn display_page_table() {
+    let mut mappings = Vec::new();
+
+    let (level_4_table_frame, _) = Cr3::read();
+    let addr = translate_physical(level_4_table_frame.start_address());
+
+    // Level 4
+    let level_4_page_table = unsafe { &*(addr.as_ptr() as *const PageTable) };
+    for (level_4_index, page_table_entry) in level_4_page_table.iter().enumerate() {
+        if page_table_entry.is_unused()
+            || !page_table_entry.flags().contains(PageTableFlags::PRESENT)
+        {
+            continue;
+        }
+        if page_table_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+            serial_println!("- {:p} - HUGE PAGE", page_table_entry.addr());
+            continue;
+        }
+
+        // Level 3
+        let level_3_page_table =
+            unsafe { &*(translate_physical(page_table_entry.addr()).as_ptr() as *const PageTable) };
+        for (level_3_index, page_table_entry) in level_3_page_table.iter().enumerate() {
+            if page_table_entry.is_unused()
+                || !page_table_entry.flags().contains(PageTableFlags::PRESENT)
+            {
+                continue;
+            }
+            if page_table_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                serial_println!("  - {:p} - 1GiB HUGE PAGE", page_table_entry.addr());
+                continue;
+            }
+
+            // Level 2
+            let level_2_page_table = unsafe {
+                &*(translate_physical(page_table_entry.addr()).as_ptr() as *const PageTable)
+            };
+            for (level_2_index, page_table_entry) in level_2_page_table.iter().enumerate() {
+                if page_table_entry.is_unused()
+                    || !page_table_entry.flags().contains(PageTableFlags::PRESENT)
+                {
+                    continue;
+                }
+                if page_table_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                    // 4MiB page
+                    let physical_address = page_table_entry.addr();
+                    let addr = level_4_index << 39 | level_3_index << 30 | level_2_index << 21;
+                    let virtual_address = VirtAddr::new(addr as u64);
+
+                    let length = Size2MiB::SIZE;
+                    mappings.push(Mapping {
+                        virt: virtual_address,
+                        physical: physical_address,
+                        length,
+                    });
+                    continue;
+                }
+
+                // Level 1
+                let level_1_page_table = unsafe {
+                    &*(translate_physical(page_table_entry.addr()).as_ptr() as *const PageTable)
+                };
+                for (level_1_index, page_table_entry) in level_1_page_table.iter().enumerate() {
+                    if page_table_entry.is_unused()
+                        || !page_table_entry.flags().contains(PageTableFlags::PRESENT)
+                    {
+                        continue;
+                    }
+                    if page_table_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                        panic!("unexpected huge page in level 1 page table")
+                    }
+
+                    let physical_address = page_table_entry.addr();
+                    let addr = level_4_index << 39
+                        | level_3_index << 30
+                        | level_2_index << 21
+                        | level_1_index << 12;
+                    let virtual_address = VirtAddr::new(addr as u64);
+
+                    let length = Size4KiB::SIZE;
+                    mappings.push(Mapping {
+                        virt: virtual_address,
+                        physical: physical_address,
+                        length,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut joined_mappings = Vec::new();
+    let mut mapping: Option<Mapping> = None;
+    for next_mapping in mappings {
+        match mapping {
+            Some(mut current_mapping) => {
+                // Check if mappings are consecutive in physical and in virtual address spaces
+                if current_mapping.physical + current_mapping.length == next_mapping.physical
+                    && current_mapping.virt + current_mapping.length == next_mapping.virt
+                {
+                    // Join mappings
+                    current_mapping.length += next_mapping.length;
+                    mapping = Some(current_mapping);
+                } else {
+                    // Push old mapping, start at new mapping
+                    joined_mappings.push(current_mapping);
+                    mapping = Some(next_mapping);
+                }
+            }
+            None => {
+                mapping = Some(next_mapping);
+            }
+        }
+    }
+
+    // Print each mapping
+    for mapping in joined_mappings {
+        serial_println!(
+            "{:014p}-{:014p} to {:014p}-{:014p} ({})",
+            mapping.virt,
+            mapping.virt + mapping.length,
+            mapping.physical,
+            mapping.physical + mapping.length,
+            format_bytes(mapping.length as u64)
+        );
+    }
 }
 
 pub trait AsU64 {

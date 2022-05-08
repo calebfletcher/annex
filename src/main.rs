@@ -8,7 +8,7 @@
 extern crate alloc;
 
 use annex::{
-    println, screen,
+    memory, println, screen, serial_println,
     task::{executor::Executor, Task},
     threading,
 };
@@ -41,6 +41,8 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     // Run the tests if we're running under the test harness
     #[cfg(test)]
     test_main();
+
+    //memory::display_page_table();
 
     threading::scheduler::with_scheduler(|s| {
         s.set_idle_thread(task_idle, 4096);
