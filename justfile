@@ -15,7 +15,7 @@ is_test := if file_name(parent_directory(kernel_binary)) == "deps" { "true" } el
 
 #qemu_bin := "/opt/qemu-7.0.0/build/qemu-system-x86_64"
 qemu_bin := "qemu-system-x86_64"
-qemu_args := "-machine q35 -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown -s " + mode_flags_qemu
+qemu_args := "-machine q35,accel=kvm --enable-kvm -cpu host -m 256M -vga std -device isa-debug-exit,iobase=0xf4,iosize=0x04 -drive format=raw,file=" + disk_image + " -serial stdio -no-reboot -no-shutdown -s " + mode_flags_qemu
 
 _default:
     just --list
