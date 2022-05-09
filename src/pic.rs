@@ -8,6 +8,9 @@ static PICS: Mutex<ChainedPics> =
     unsafe { Mutex::new(ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET)) };
 
 pub fn disable() {
-    unsafe { PICS.lock().initialize() };
-    unsafe { PICS.lock().write_masks(0xFF, 0xFF) };
+    unsafe {
+        let mut pics = PICS.lock();
+        pics.initialize();
+        pics.write_masks(0xFF, 0xFF)
+    };
 }
