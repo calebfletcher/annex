@@ -16,24 +16,22 @@ pub fn init(addr: VirtAddr) {
 
     LAPIC
         .try_init_once(|| {
-            let mut lapic = x2apic::lapic::LocalApicBuilder::new()
+            let lapic = x2apic::lapic::LocalApicBuilder::new()
                 .timer_vector(61)
                 .error_vector(62)
-                .spurious_vector(63)
+                .spurious_vector(0xFF)
                 .set_xapic_base(addr.as_u64())
                 .timer_divide(x2apic::lapic::TimerDivide::Div16)
                 .timer_mode(x2apic::lapic::TimerMode::Periodic)
-                .timer_initial(100_000)
+                .timer_initial(1_000_000)
                 .build()
                 .unwrap_or_else(|err| panic!("{}", err));
-
-            unsafe {
-                lapic.enable();
-            }
 
             spin::Mutex::new(lapic)
         })
         .unwrap();
+
+    unsafe { LAPIC.try_get().unwrap().lock().enable() }
 }
 
 pub fn check_status() {

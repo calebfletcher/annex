@@ -5,15 +5,29 @@ use alloc::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     vec::Vec,
 };
+use log::debug;
 use spin::Mutex;
 use x86_64::{instructions::interrupts, registers::control::Cr3};
 
 use crate::hpet;
 
 use super::{
-    thread::{Stack, ThreadId, ThreadView},
+    thread::{BlockReason, Stack, ThreadId, ThreadView},
     Thread, ThreadState,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Deadline(u64);
+
+impl Deadline {
+    pub fn absolute(deadline: u64) -> Self {
+        Self(deadline)
+    }
+
+    pub fn relative(deadline: u64) -> Self {
+        Self(hpet::nanoseconds().checked_add(deadline).unwrap())
+    }
+}
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 
@@ -34,7 +48,10 @@ pub struct Scheduler {
     paused_threads: VecDeque<ThreadId>,
 
     /// Threads which are blocked on something happening (I/O, delay, etc.)
-    blocked_threads: BTreeSet<ThreadId>,
+    //blocked_threads: BTreeSet<ThreadId>,
+
+    /// Map of threads which are currently sleeping, ordered by deadline
+    sleeping_threads: BTreeMap<Deadline, BTreeSet<ThreadId>>,
 
     /// Time of the last accounting update in nanoseconds since boot
     last_accounting_update: u64,
@@ -59,7 +76,8 @@ impl Scheduler {
             idle_thread_id: None,
             current_thread_id: root_id,
             paused_threads: VecDeque::new(),
-            blocked_threads: BTreeSet::new(),
+            //blocked_threads: BTreeSet::new(),
+            sleeping_threads: BTreeMap::new(),
             last_accounting_update: 0,
         }
     }
@@ -123,6 +141,21 @@ impl Scheduler {
         Some(self.current_thread_id) == self.idle_thread_id
     }
 
+    /// Put a thread to sleep
+    pub fn sleep_thread(&mut self, id: ThreadId, deadline: Deadline) {
+        self.threads
+            .get_mut(&id)
+            .unwrap()
+            .set_state(ThreadState::Blocked(BlockReason::Other));
+        let entry = self.sleeping_threads.entry(deadline);
+        entry.or_default().insert(id);
+        debug!(
+            "sleeping thread {} for {} ns",
+            id.as_usize(),
+            deadline.0 - hpet::nanoseconds()
+        );
+    }
+
     /// Get the current and next thread blocks as pointers.
     ///
     /// # Safety
@@ -143,7 +176,30 @@ impl Scheduler {
             return None;
         }
 
+        // Update time accounting
         self.update_time_used();
+
+        // Check on sleeping threads that have met their deadline
+        while let Some((deadline, threads)) = self.sleeping_threads.pop_first() {
+            if deadline <= Deadline(hpet::nanoseconds()) {
+                for thread_id in threads {
+                    self.threads
+                        .get_mut(&thread_id)
+                        .unwrap()
+                        .set_state(ThreadState::ReadyToRun);
+
+                    self.paused_threads.push_back(thread_id);
+
+                    debug!(
+                        "woke thread {} at {} ns",
+                        thread_id.as_usize(),
+                        deadline.0 - hpet::nanoseconds()
+                    );
+                }
+            } else {
+                self.sleeping_threads.insert(deadline, threads);
+            }
+        }
 
         // Get next thread with round robin scheduler
         let mut next_thread_id = self.next_thread();
@@ -200,6 +256,12 @@ impl Scheduler {
     #[must_use]
     pub fn active(&self) -> bool {
         self.active
+    }
+
+    /// Get the scheduler's current thread id.
+    #[must_use]
+    pub fn current_thread_id(&self) -> ThreadId {
+        self.current_thread_id
     }
 }
 
