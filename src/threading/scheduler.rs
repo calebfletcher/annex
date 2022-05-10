@@ -180,6 +180,8 @@ impl Scheduler {
         self.update_time_used();
 
         // Check on sleeping threads that have met their deadline
+        //trace!("checking sleeping threads");
+
         while let Some((deadline, threads)) = self.sleeping_threads.pop_first() {
             if deadline <= Deadline(hpet::nanoseconds()) {
                 for thread_id in threads {
@@ -198,6 +200,9 @@ impl Scheduler {
                 }
             } else {
                 self.sleeping_threads.insert(deadline, threads);
+
+                // No other deadlines could have been met
+                break;
             }
         }
 
@@ -206,10 +211,12 @@ impl Scheduler {
 
         if next_thread_id.is_none() && !self.is_idle_thread_active() {
             // Thread currently executing is the only available thread
+            //trace!("current thread is only one available");
             next_thread_id = Some(self.current_thread_id);
         }
 
         if let Some(next_id) = next_thread_id {
+            //trace!("switching to thread {:?}", next_id);
             // Update current thread id with next thread id
             let prev_thread_id = mem::replace(&mut self.current_thread_id, next_id);
 

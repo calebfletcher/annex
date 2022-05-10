@@ -33,15 +33,6 @@ build-image:
 
 build: build-kernel build-image
 
-qemu-test:
-    #!/usr/bin/env bash
-    set -uxo pipefail
-
-    {{qemu_bin}} \
-        {{qemu_args}} \
-        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-        -display none; (( $?==33 ))
-
 qemu:
     #!/usr/bin/env bash
     set -euxo pipefail
@@ -57,7 +48,7 @@ qemu-dbg: build
     {{qemu_bin}} {{qemu_args}} -S
 
 gdb:
-    rust-gdb {{kernel_binary}} -ex "target remote :1234" -ex "b entry_point" -ex "c"
+    rust-gdb {{kernel_binary}} -ex "target remote :1234" -ex "b entry_point"
 
 runner binary:
     just kernel_binary={{absolute_path(binary)}} build-image

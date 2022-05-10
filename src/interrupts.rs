@@ -1,5 +1,7 @@
 use crate::{apic, gdt, hlt_loop, println, serial_println, threading};
 use lazy_static::lazy_static;
+
+use log::trace;
 use x86_64::{
     instructions::port::Port,
     registers::control::Cr2,
@@ -11,6 +13,7 @@ use x86_64::{
 pub enum InterruptIndex {
     APIC = 61,
     IOAPICKB = 91,
+    CTXSWITCH = 99,
 }
 
 lazy_static! {
@@ -32,6 +35,7 @@ lazy_static! {
         }
         idt[InterruptIndex::APIC as usize].set_handler_fn(apic_interrupt_handler);
         idt[InterruptIndex::IOAPICKB as usize].set_handler_fn(ioapic_keyboard_interrupt_handler);
+        idt[InterruptIndex::CTXSWITCH as usize].set_handler_fn(context_switch_handler);
 
         idt
     };
@@ -57,12 +61,77 @@ extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFra
 
     unsafe {
         if let Some((prev_thread_id, next_thread_id)) =
-            threading::scheduler::with_scheduler_from_irq(|s| s.schedule())
+            threading::scheduler::with_scheduler_from_irq(|s| {
+                s.schedule().inspect(|(from, to)| {
+                    trace!("switching from {} to {}", from.as_usize(), to.as_usize())
+                })
+            })
         {
             threading::switch(prev_thread_id, next_thread_id);
         }
     };
 }
+extern "x86-interrupt" fn context_switch_handler(_stack_frame: InterruptStackFrame) {
+    unsafe {
+        if let Some((prev_thread_id, next_thread_id)) =
+            threading::scheduler::with_scheduler_from_irq(|s| {
+                s.schedule().inspect(|(from, to)| {
+                    //trace!("switching from {} to {}", from.as_usize(), to.as_usize())
+                })
+            })
+        {
+            threading::switch(prev_thread_id, next_thread_id);
+        }
+    };
+}
+//     unsafe {
+//         asm!(
+//             "
+
+//         push rax
+//         push rbx
+//         push rcx
+//         push rdx
+//         push rsi
+//         push rdi
+//         push rbp
+//         push r8
+//         push r9
+//         push r10
+//         push r11
+//         push r12
+//         push r13
+//         push r14
+//         push r15
+//         pushfq
+
+//         //mov rax, [rsp - 16*8]
+//         //mov DWORD PTR [rsp - 16*8], 0x21e261
+
+//         popfq
+//         pop r15
+//         pop r15
+//         pop r14
+//         pop r13
+//         pop r12
+//         pop r11
+//         pop r10
+//         pop r9
+//         pop r8
+//         pop rbp
+//         pop rdi
+//         pop rsi
+//         pop rdx
+//         pop rcx
+//         pop rbx
+//         pop rax
+
+//         iretq
+//     ",
+//             options(noreturn)
+//         )
+//     }
+// }
 
 extern "x86-interrupt" fn invalid_tss_handler(stack_frame: InterruptStackFrame, code: u64) {
     serial_println!("EXCEPTION: INVALID TSS({})\n{:#?}", code, stack_frame);

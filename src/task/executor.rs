@@ -2,7 +2,6 @@ use core::task::{Context, Poll, Waker};
 
 use alloc::{collections::BTreeMap, sync::Arc, task::Wake};
 use crossbeam::queue::ArrayQueue;
-use x86_64::instructions::interrupts;
 
 use super::{Task, TaskId};
 
@@ -66,12 +65,13 @@ impl Executor {
     }
 
     fn sleep_if_idle(&self) {
-        interrupts::disable();
-        if self.task_queue.is_empty() {
-            interrupts::enable_and_hlt();
-        } else {
-            interrupts::enable();
-        }
+        // TODO: Make this thread aware
+        // interrupts::disable();
+        // if self.task_queue.is_empty() {
+        //     interrupts::enable_and_hlt();
+        // } else {
+        //     interrupts::enable();
+        // }
     }
 }
 

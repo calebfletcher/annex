@@ -8,7 +8,7 @@
 extern crate alloc;
 
 use annex::{
-    memory, println, screen, serial_println,
+    println, screen,
     task::{executor::Executor, Task},
     threading,
 };
@@ -47,11 +47,15 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     threading::scheduler::with_scheduler(|s| {
         s.set_idle_thread(task_idle, 4096);
         s.add_paused_thread("async", task_async_executor, 4096);
+        s.add_paused_thread("sleep", task_sleep, 4096);
         s.set_active(true);
     });
 
     println!("loaded kernel");
-    loop {}
+
+    loop {
+        threading::sleep(threading::Deadline::relative(1_000_000_000));
+    }
 }
 
 fn task_idle() -> ! {
@@ -59,6 +63,13 @@ fn task_idle() -> ! {
     loop {
         instructions::hlt();
         threading::yield_now();
+    }
+}
+
+fn task_sleep() -> ! {
+    interrupts::enable();
+    loop {
+        threading::sleep(threading::Deadline::relative(1_000_000_000));
     }
 }
 

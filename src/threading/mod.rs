@@ -2,9 +2,13 @@ use core::arch::asm;
 
 pub mod scheduler;
 pub mod thread;
+
 pub use thread::{Thread, ThreadState};
 
-use self::thread::ThreadId;
+pub use scheduler::Deadline;
+use thread::ThreadId;
+
+use crate::interrupts;
 
 /// # Safety
 /// Supplied pointers must be valid threads.
@@ -63,14 +67,12 @@ pub unsafe fn switch(from: ThreadId, to: ThreadId) {
 }
 
 pub fn yield_now() {
-    unsafe {
-        if let Some((prev_thread, next_thread)) = scheduler::with_scheduler(|s| {
-            s.schedule()
-                .map(|(from_id, next_id)| s.thread_pointers(from_id, next_id))
-        }) {
-            switch_to_thread(prev_thread, next_thread);
-        }
-    };
+    unsafe { x86_64::software_interrupt!(interrupts::InterruptIndex::CTXSWITCH as usize) };
+}
+
+pub fn sleep(deadline: Deadline) {
+    scheduler::with_scheduler(|s| s.sleep_thread(s.current_thread_id(), deadline));
+    yield_now();
 }
 
 // pub fn block_current_thread(reason: BlockReason) {

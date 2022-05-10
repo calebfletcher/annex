@@ -174,7 +174,7 @@ pub static IOAPIC: OnceCell<spin::Mutex<IoApic>> = OnceCell::uninit();
 
 pub struct Handler {}
 
-impl<'a> acpi::AcpiHandler for &Handler {
+impl acpi::AcpiHandler for &Handler {
     unsafe fn map_physical_region<T>(
         &self,
         physical_address: usize,
