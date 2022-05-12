@@ -8,7 +8,9 @@
 extern crate alloc;
 
 use annex::{
-    println, screen,
+    colour,
+    gui::{self, Draw},
+    println,
     task::{executor::Executor, Task},
     threading,
 };
@@ -47,7 +49,8 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     threading::scheduler::with_scheduler(|s| {
         s.set_idle_thread(task_idle, 4096);
         s.add_paused_thread("async", task_async_executor, 4096);
-        s.add_paused_thread("sleep", task_sleep, 4096);
+        s.add_paused_thread("screen", task_screen_update, 4096);
+        s.add_paused_thread("clock", task_clock, 4096);
         s.set_active(true);
     });
 
@@ -66,10 +69,70 @@ fn task_idle() -> ! {
     }
 }
 
-fn task_sleep() -> ! {
+fn task_screen_update() -> ! {
     interrupts::enable();
+    gui::SCREEN.try_get().unwrap().lock().clear(colour::GREY);
+
+    let initial = gui::Coordinates::new(0, 0, 300, 150);
+    let window = gui::SCREEN.try_get().unwrap().lock().new_window(initial);
+    window.lock().clear(colour::BLUE);
+
+    let mut moving_right = true;
+    let mut moving_down = true;
+
     loop {
-        threading::sleep(threading::Deadline::relative(1_000_000_000));
+        gui::SCREEN.try_get().unwrap().lock().render();
+        let mut win = window.lock();
+
+        if moving_right {
+            win.coordinates.x += 1;
+            if win.coordinates.x + win.width() as isize
+                >= gui::SCREEN.try_get().unwrap().lock().width() as isize
+            {
+                moving_right = false;
+                win.coordinates.x -= 1;
+                //win.coordinates.y += 10;
+            }
+        } else {
+            win.coordinates.x -= 1;
+            if win.coordinates.x < 0 {
+                moving_right = true;
+                win.coordinates.x += 1;
+                //win.coordinates.y += 10;
+            }
+        }
+
+        if moving_down {
+            win.coordinates.y += 1;
+            if win.coordinates.y + win.height() as isize
+                >= gui::SCREEN.try_get().unwrap().lock().height() as isize
+            {
+                moving_down = false;
+                win.coordinates.y -= 1;
+                //win.coordinates.y += 10;
+            }
+        } else {
+            win.coordinates.y -= 1;
+            if win.coordinates.y < 0 {
+                moving_down = true;
+                win.coordinates.y += 1;
+                //win.coordinates.y += 10;
+            }
+        }
+
+        //threading::sleep(threading::Deadline::relative(30_000_000));
+    }
+}
+
+fn task_clock() -> ! {
+    interrupts::enable();
+
+    // let initial = gui::Coordinates::new(60, 30, 300, 150);
+    // let window = gui::SCREEN.try_get().unwrap().lock().new_window(initial);
+    // window.lock().clear(colour::BLUE);
+
+    loop {
+        threading::sleep(threading::Deadline::relative(100_000_000));
     }
 }
 

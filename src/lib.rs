@@ -33,6 +33,7 @@ pub mod cmos;
 pub mod colour;
 pub mod emulators;
 pub mod gdt;
+pub mod gui;
 pub mod hpet;
 pub mod interrupts;
 pub mod logger;
@@ -54,15 +55,15 @@ pub fn init(
     physical_memory_offset: VirtAddr,
     memory_regions: &'static MemoryRegions,
 ) {
+    let mut mapper = unsafe { memory::init(physical_memory_offset) };
+    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(memory_regions) };
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialisation failed");
+
     let buffer_info = framebuffer.info();
     let buffer = framebuffer.buffer_mut();
 
     // Initialise screen
-    let mut screen = screen::Screen::new(buffer, buffer_info);
-    screen.clear(colour::BLACK);
-
-    // Initialise text console
-    init_terminal(screen);
+    gui::Screen::init(buffer, buffer_info);
 
     gdt::init();
     interrupts::init_idt();
@@ -72,10 +73,6 @@ pub fn init(
 
     // Enable interrupts
     x86_64::instructions::interrupts::enable();
-
-    let mut mapper = unsafe { memory::init(physical_memory_offset) };
-    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialisation failed");
 
     memory::MemoryManager::init(physical_memory_offset, mapper, frame_allocator);
 
@@ -96,14 +93,6 @@ pub fn init(
         .unwrap();
 
     hpet::init(acpi::ACPI.try_get().unwrap().lock().hpet());
-}
-
-fn init_terminal(screen: screen::Screen<'static>) {
-    let console = screen::Terminal::new(screen);
-
-    screen::TERMINAL
-        .try_init_once(move || spin::mutex::SpinMutex::new(console))
-        .unwrap();
 }
 
 pub fn hlt_loop() -> ! {

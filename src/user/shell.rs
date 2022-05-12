@@ -1,10 +1,11 @@
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-use crate::{acpi, cmos, emulators, hpet, print, println, task::keyboard, threading};
+use crate::{acpi, cmos, emulators, gui, hpet, print, println, task::keyboard, threading};
 
 use super::line_edit;
 
 pub async fn run() {
+    let window = gui::SCREEN.try_get().unwrap();
     let mut editor = line_edit::Editor::new(keyboard::KeyStream::new());
 
     let mut history = Vec::new();

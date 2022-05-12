@@ -76,6 +76,8 @@ impl FromStr for Colour {
 #[allow(dead_code)]
 pub static BLACK: Colour = Colour::new(0x00, 0x00, 0x00);
 #[allow(dead_code)]
+pub static GREY: Colour = Colour::new(0x20, 0x20, 0x20);
+#[allow(dead_code)]
 pub static WHITE: Colour = Colour::new(0xFF, 0xFF, 0xFF);
 #[allow(dead_code)]
 pub static RED: Colour = Colour::new(0xFF, 0x00, 0x00);
@@ -83,3 +85,31 @@ pub static RED: Colour = Colour::new(0xFF, 0x00, 0x00);
 pub static GREEN: Colour = Colour::new(0x00, 0xFF, 0x00);
 #[allow(dead_code)]
 pub static BLUE: Colour = Colour::new(0x00, 0x00, 0xFF);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextColour {
+    foreground: Colour,
+    background: Colour,
+}
+
+impl TextColour {
+    pub const fn new(foreground: Colour, background: Colour) -> Self {
+        Self {
+            foreground,
+            background,
+        }
+    }
+    pub fn lerp(&self, amount: f32) -> Option<Colour> {
+        let (fg, bg) = (self.foreground, self.background);
+        Some(Colour {
+            r: (bg.r as f32 + ((fg.r - bg.r) as f32 * amount)) as u8,
+            g: (bg.g as f32 + ((fg.g - bg.g) as f32 * amount)) as u8,
+            b: (bg.b as f32 + ((fg.b - bg.b) as f32 * amount)) as u8,
+        })
+    }
+}
+
+#[allow(dead_code)]
+pub static WHITE_ON_BLACK: TextColour = TextColour::new(WHITE, BLACK);
+#[allow(dead_code)]
+pub static BLACK_ON_WHITE: TextColour = TextColour::new(BLACK, WHITE);
