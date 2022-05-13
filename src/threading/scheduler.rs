@@ -5,7 +5,6 @@ use alloc::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     vec::Vec,
 };
-use log::debug;
 use spin::Mutex;
 use x86_64::{instructions::interrupts, registers::control::Cr3};
 
@@ -149,11 +148,11 @@ impl Scheduler {
             .set_state(ThreadState::Blocked(BlockReason::Other));
         let entry = self.sleeping_threads.entry(deadline);
         entry.or_default().insert(id);
-        debug!(
-            "sleeping thread {} for {} ns",
-            id.as_usize(),
-            deadline.0 - hpet::nanoseconds()
-        );
+        // debug!(
+        //     "sleeping thread {} for {} ns",
+        //     id.as_usize(),
+        //     deadline.0 - hpet::nanoseconds()
+        // );
     }
 
     /// Get the current and next thread blocks as pointers.
@@ -161,11 +160,11 @@ impl Scheduler {
     /// # Safety
     /// The pointers are only valid for the duration of the scheduler lock.
     pub unsafe fn thread_pointers(
-        &self,
+        &mut self,
         from_id: ThreadId,
         next_id: ThreadId,
-    ) -> (*const Thread, *const Thread) {
-        let current_thread = self.threads.get(&from_id).unwrap() as *const Thread;
+    ) -> (*mut Thread, *const Thread) {
+        let current_thread = self.threads.get_mut(&from_id).unwrap() as *mut Thread;
         let next_thread = self.threads.get(&next_id).unwrap() as *const Thread;
 
         (current_thread, next_thread)
@@ -192,16 +191,16 @@ impl Scheduler {
 
                     self.paused_threads.push_back(thread_id);
 
-                    debug!(
-                        "woke thread {} at {} ns",
-                        thread_id.as_usize(),
-                        deadline.0 - hpet::nanoseconds()
-                    );
+                    // debug!(
+                    //     "woke thread {} at {} ns",
+                    //     thread_id.as_usize(),
+                    //     deadline.0 - hpet::nanoseconds()
+                    // );
                 }
             } else {
                 self.sleeping_threads.insert(deadline, threads);
 
-                // No other deadlines could have been met
+                // No other deadlines could have been met, so stop trying
                 break;
             }
         }

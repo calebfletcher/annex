@@ -4,6 +4,7 @@ use core::{
 };
 
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec};
+use log::trace;
 use x86_64::{PhysAddr, VirtAddr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -160,21 +161,28 @@ impl Stack {
     pub fn new(stack_size: usize, entry: fn() -> !) -> Self {
         // Create stack for the new thread
         let mut stack = vec![0u64; stack_size].into_boxed_slice();
+        trace!(
+            "allocating stack from {:p} to {:p}",
+            &stack[0],
+            &stack[stack_size - 1]
+        );
 
         // Initialise stack in the reverse order registers get popped off it
-        stack[stack_size - 2] = 0x0; // rbx
-        stack[stack_size - 3] = 0x0; // r12
-        stack[stack_size - 4] = 0x0; // r13
-        stack[stack_size - 5] = 0x0; // r14
-        stack[stack_size - 6] = 0x0; // r15
-        stack[stack_size - 1] = entry as *const () as u64; // rip
+        // Should contain an interrupt stack frame before the general registers
+        stack[stack_size - 1] = 0x10; // return ss
+        stack[stack_size - 2] = &stack[stack_size - 1] as *const u64 as u64; // return rsp
+        stack[stack_size - 3] = 0x202; // return rflags (reserved flag set)
+        stack[stack_size - 4] = 0x8; // return cs
+        stack[stack_size - 5] = entry as *const () as u64; // return rip
+                                                           //stack[stack_size - 5] = 0xDEADBFEF; // return rip
+        stack[stack_size - 12] = &stack[stack_size - 1] as *const u64 as u64; // rbp, should be same as return rsp
 
         Self { buffer: stack }
     }
 
     pub fn initial_stack_pointer(&self) -> VirtAddr {
-        // Pointer to where the stack pointer needs to be so the ret lines up with the entry point
-        let stack_pointer = unsafe { (&self.buffer[self.buffer.len() - 1] as *const u64).sub(5) };
+        // Pointer to where the stack pointer needs to be so the iret will pop the interrupt stack frame
+        let stack_pointer = &self.buffer[self.buffer.len() - 20] as *const u64;
 
         VirtAddr::new(stack_pointer as u64)
     }
