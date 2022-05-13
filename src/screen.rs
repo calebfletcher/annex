@@ -1,11 +1,14 @@
+use alloc::sync::Arc;
+use spin::Mutex;
+
 use crate::{
     colour::{self},
-    gui::{Draw, Screen},
+    gui::{Draw, Window},
     serial_println,
 };
 
 pub struct TextConsole {
-    screen: Screen,
+    window: Arc<Mutex<Window>>,
     font_weight: noto_sans_mono_bitmap::FontWeight,
     font_size: noto_sans_mono_bitmap::BitmapHeight,
     line_height: usize,
@@ -14,12 +17,12 @@ pub struct TextConsole {
 }
 
 impl TextConsole {
-    pub fn new(screen: Screen) -> Self {
+    pub fn new(window: Arc<Mutex<Window>>) -> Self {
         let font_weight = noto_sans_mono_bitmap::FontWeight::Regular;
         let font_size = noto_sans_mono_bitmap::BitmapHeight::Size14;
 
         Self {
-            screen,
+            window,
             line_height: font_size.val() + 2,
             font_weight,
             font_size,
@@ -32,7 +35,7 @@ impl TextConsole {
         self.row += self.line_height;
         self.col = 0;
 
-        if self.row + self.line_height >= self.screen.height() {
+        if self.row + self.line_height >= self.window.lock().height() {
             self.scroll_by(1);
             self.row -= self.line_height;
         }
@@ -41,26 +44,28 @@ impl TextConsole {
     /// Scroll the terminal up by `n` lines.
     ///
     /// After this has been called, the cursor will be in the same place on the
-    /// screen, i.e. will seem to have been moved `n` lines down in the content.
+    /// window, i.e. will seem to have been moved `n` lines down in the content.
     pub fn scroll_by(&mut self, n: usize) {
         let pixel_delta = n * self.line_height;
 
         // Move existing content up
-        for new_row in 0..(self.screen.height() - pixel_delta).max(0) {
+        for new_row in 0..(self.window.lock().height() - pixel_delta).max(0) {
             let old_row = new_row + pixel_delta;
 
-            self.screen.copy_row(old_row, new_row);
+            self.window.lock().copy_row(old_row, new_row);
         }
 
         // Blank lines that have come in
-        for new_row in (self.screen.height() - pixel_delta).max(0)..self.screen.height() {
-            self.screen.write_row(new_row, colour::BLACK);
+        for new_row in
+            (self.window.lock().height() - pixel_delta).max(0)..self.window.lock().height()
+        {
+            self.window.lock().write_row(new_row, colour::BLACK);
         }
     }
 
     #[allow(dead_code)]
     pub fn clear(&mut self) {
-        self.screen.clear(colour::BLACK);
+        self.window.lock().clear(colour::BLACK);
     }
 
     #[allow(dead_code)]
@@ -74,12 +79,13 @@ impl TextConsole {
             Direction::Up => self.row = self.row.saturating_sub(amount * self.line_height),
             Direction::Down => {
                 self.row = self
-                    .screen
+                    .window
+                    .lock()
                     .height()
                     .min(self.row + amount * self.line_height)
             }
             Direction::Left => self.col = self.col.saturating_sub(amount * 8),
-            Direction::Right => self.col = self.screen.width().min(self.col + amount * 8),
+            Direction::Right => self.col = self.window.lock().width().min(self.col + amount * 8),
         };
     }
 
@@ -93,7 +99,7 @@ impl TextConsole {
                     self.write_char_at(self.row, self.col, c, colour::WHITE_ON_BLACK)
                 {
                     self.col += width;
-                    if self.col >= self.screen.width() {
+                    if self.col >= self.window.lock().width() {
                         self.newline();
                     }
                 }
@@ -114,7 +120,7 @@ impl TextConsole {
                     let pixel_row = base_row + row_i;
                     let pixel_col = base_col + col_i;
 
-                    self.screen.write_pixel(
+                    self.window.lock().write_pixel(
                         pixel_row,
                         pixel_col,
                         colour.lerp(pixel as f32 / 255.0).unwrap(),
@@ -201,9 +207,9 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    pub fn new(screen: Screen) -> Self {
+    pub fn new(window: Arc<Mutex<Window>>) -> Self {
         Self {
-            console: TextConsole::new(screen),
+            console: TextConsole::new(window),
             state_machine: vte::Parser::new(),
         }
     }
@@ -217,44 +223,4 @@ impl core::fmt::Write for Terminal {
 
         Ok(())
     }
-}
-
-#[macro_export]
-macro_rules! print {
-        ($($arg:tt)*) => ($crate::screen::_print(format_args!($($arg)*)));
-    }
-
-#[macro_export]
-macro_rules! println {
-        () => ($crate::print!("\n"));
-        ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-    }
-
-#[doc(hidden)]
-pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    // interrupts::without_interrupts(|| {
-    //     TERMINAL.try_get().unwrap().lock().write_fmt(args).unwrap();
-    // });
-}
-
-#[macro_export]
-macro_rules! dbg {
-    () => {
-        $crate::println!("[{}:{}]", $crate::file!(), $crate::line!())
-    };
-    ($val:expr $(,)?) => {
-        // Use of `match` here is intentional because it affects the lifetimes
-        // of temporaries - https://stackoverflow.com/a/48732525/1063961
-        match $val {
-            tmp => {
-                $crate::println!("[{}:{}] {} = {:#?}",
-                    file!(), line!(), stringify!($val), &tmp);
-                tmp
-            }
-        }
-    };
-    ($($val:expr),+ $(,)?) => {
-        ($($crate::dbg!($val)),+,)
-    };
 }

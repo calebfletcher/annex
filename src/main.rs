@@ -10,7 +10,6 @@ extern crate alloc;
 use annex::{
     colour,
     gui::{self, Draw},
-    println,
     task::{executor::Executor, Task},
     threading,
 };
@@ -38,7 +37,6 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
     );
 
     info!("starting kernel");
-    println!("starting kernel");
 
     // Run the tests if we're running under the test harness
     #[cfg(test)]
@@ -53,8 +51,6 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
         s.add_paused_thread("clock", task_clock, 4096);
         s.set_active(true);
     });
-
-    println!("loaded kernel");
 
     loop {
         threading::sleep(threading::Deadline::relative(1_000_000_000));
@@ -79,57 +75,55 @@ fn task_screen_update() -> ! {
 
     let mut moving_right = true;
     let mut moving_down = true;
+    let horizontal_velocity = 3;
+    let vertical_velocity = 3;
 
     loop {
         gui::SCREEN.try_get().unwrap().lock().render();
         let mut win = window.lock();
 
         if moving_right {
-            win.coordinates.x += 1;
+            win.coordinates.x += horizontal_velocity;
             if win.coordinates.x + win.width() as isize
                 >= gui::SCREEN.try_get().unwrap().lock().width() as isize
             {
                 moving_right = false;
-                win.coordinates.x -= 1;
-                //win.coordinates.y += 10;
+                win.coordinates.x -= horizontal_velocity;
             }
         } else {
-            win.coordinates.x -= 1;
+            win.coordinates.x -= horizontal_velocity;
             if win.coordinates.x < 0 {
                 moving_right = true;
-                win.coordinates.x += 1;
-                //win.coordinates.y += 10;
+                win.coordinates.x += horizontal_velocity;
             }
         }
 
         if moving_down {
-            win.coordinates.y += 1;
+            win.coordinates.y += vertical_velocity;
             if win.coordinates.y + win.height() as isize
                 >= gui::SCREEN.try_get().unwrap().lock().height() as isize
             {
                 moving_down = false;
-                win.coordinates.y -= 1;
-                //win.coordinates.y += 10;
+                win.coordinates.y -= vertical_velocity;
             }
         } else {
-            win.coordinates.y -= 1;
+            win.coordinates.y -= vertical_velocity;
             if win.coordinates.y < 0 {
                 moving_down = true;
-                win.coordinates.y += 1;
-                //win.coordinates.y += 10;
+                win.coordinates.y += vertical_velocity;
             }
         }
 
-        //threading::sleep(threading::Deadline::relative(30_000_000));
+        threading::sleep(threading::Deadline::relative(10_000_000));
     }
 }
 
 fn task_clock() -> ! {
     interrupts::enable();
 
-    // let initial = gui::Coordinates::new(60, 30, 300, 150);
-    // let window = gui::SCREEN.try_get().unwrap().lock().new_window(initial);
-    // window.lock().clear(colour::BLUE);
+    let initial = gui::Coordinates::new(60, 30, 300, 150);
+    let window = gui::SCREEN.try_get().unwrap().lock().new_window(initial);
+    window.lock().clear(colour::GREEN);
 
     loop {
         threading::sleep(threading::Deadline::relative(100_000_000));

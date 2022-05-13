@@ -1,10 +1,10 @@
-use core::{marker, mem};
+use core::{fmt::Write, marker, mem};
 
-use alloc::string::String;
+use alloc::{format, string::String};
 use futures_util::{Stream, StreamExt};
 use pc_keyboard::DecodedKey;
 
-use crate::print;
+use crate::screen::Terminal;
 
 pub struct Editor<S>
 where
@@ -25,8 +25,8 @@ impl<S: Stream<Item = DecodedKey> + marker::Unpin> Editor<S> {
     /// Get a line from the user
     ///
     /// Does not include the final newline.
-    pub async fn prompt(&mut self, prompt: &str) -> String {
-        print!("{}", prompt);
+    pub async fn prompt(&mut self, prompt: &str, terminal: &mut Terminal) -> String {
+        terminal.write_str(prompt).unwrap();
         while let Some(key) = self.input.next().await {
             // Ignore raw keys (Alt, Ctrl, other modifier keys)
             let key = match key {
@@ -39,17 +39,17 @@ impl<S: Stream<Item = DecodedKey> + marker::Unpin> Editor<S> {
             match key {
                 ' '..='~' => {
                     self.current_line.push(key);
-                    print!("{}", key);
+                    terminal.write_str(&format!("{}", key)).unwrap();
                 }
                 '\n' => {
                     // Don't include final newline
-                    print!("{}", key);
+                    terminal.write_str(&format!("{}", key)).unwrap();
                     break;
                 }
                 '\x08' => {
                     // Backspace
                     if self.current_line.pop().is_some() {
-                        print!("\x1b[D \x1b[D");
+                        terminal.write_str("\x1b[D \x1b[D").unwrap();
                     }
                 }
                 '\x7F' => {

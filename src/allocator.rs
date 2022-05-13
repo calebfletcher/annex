@@ -14,7 +14,7 @@ use x86_64::{
 };
 
 pub const HEAP_START: usize = 0x_4444_0000_0000;
-pub const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MiB
+pub const HEAP_SIZE: usize = 48 * 1024 * 1024; // 16 MiB
 
 pub fn init_heap(
     mapper: &mut impl Mapper<Size4KiB>,
