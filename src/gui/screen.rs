@@ -1,35 +1,31 @@
+use alloc::string::String;
 use alloc::vec;
 use alloc::{sync::Arc, vec::Vec};
 use bootloader::boot_info::PixelFormat;
 use conquer_once::noblock::OnceCell;
+
+use crate::utils::font::Font;
 
 use super::colour::{self, Colour, RGBA_BYTES_PER_PIXEL};
 use super::{Coordinates, Draw, Window};
 
 pub static SCREEN: OnceCell<spin::Mutex<Screen>> = OnceCell::uninit();
 
+static TITLE_HEIGHT: usize = 20;
+static TITLE_FONT: Font = Font::new(
+    noto_sans_mono_bitmap::FontWeight::Regular,
+    noto_sans_mono_bitmap::BitmapHeight::Size14,
+    colour::TextColour::new(colour::WHITE, colour::LIGHT_GREY),
+);
+
 pub struct Screen {
     front_buffer: &'static mut [u8],
     back_buffer: Vec<u8>,
     info: bootloader::boot_info::FrameBufferInfo,
-    windows: Vec<Arc<spin::Mutex<Window>>>,
+    windows: Arc<spin::Mutex<Vec<Arc<spin::Mutex<Window>>>>>,
 }
 
 impl Screen {
-    pub fn new(
-        front_buffer: &'static mut [u8],
-        back_buffer: Vec<u8>,
-        info: bootloader::boot_info::FrameBufferInfo,
-        windows: Vec<Arc<spin::Mutex<Window>>>,
-    ) -> Self {
-        Self {
-            front_buffer,
-            back_buffer,
-            info,
-            windows,
-        }
-    }
-
     pub fn init(front_buffer: &'static mut [u8], info: bootloader::boot_info::FrameBufferInfo) {
         let num_bytes =
             info.horizontal_resolution * info.vertical_resolution * RGBA_BYTES_PER_PIXEL;
@@ -41,7 +37,7 @@ impl Screen {
                     front_buffer,
                     back_buffer,
                     info,
-                    windows: Vec::new(),
+                    windows: Arc::new(spin::Mutex::new(Vec::new())),
                 })
             })
             .unwrap();
@@ -51,8 +47,37 @@ impl Screen {
 
     pub fn render(&mut self) {
         self.clear(colour::GREY);
-        for window in &self.windows {
+
+        let windows = Arc::clone(&self.windows);
+        for window in windows.lock().iter() {
             let mut window = window.lock();
+
+            // Draw title box
+            for row in 0..TITLE_HEIGHT as isize {
+                for col in 0..window.coordinates.width as isize {
+                    let screen_x = window.coordinates.x + col;
+                    let screen_y = window.coordinates.y + row - TITLE_HEIGHT as isize;
+
+                    // Don't print pixels outside the screen area
+                    if screen_x < 0
+                        || screen_x >= self.width() as isize
+                        || screen_y < 0
+                        || screen_y >= self.height() as isize
+                    {
+                        continue;
+                    }
+
+                    self.write_pixel(screen_y, screen_x, colour::LIGHT_GREY);
+                }
+            }
+
+            // Draw title
+            TITLE_FONT.write(
+                self,
+                window.coordinates.y - TITLE_HEIGHT as isize + 3,
+                window.coordinates.x + 4,
+                window.name(),
+            );
 
             for row in 0..window.coordinates.height as isize {
                 for col in 0..window.coordinates.width as isize {
@@ -122,16 +147,17 @@ impl Screen {
         }
     }
 
-    pub fn new_window(&mut self, initial: Coordinates) -> Arc<spin::Mutex<Window>> {
+    pub fn new_window(&mut self, name: String, initial: Coordinates) -> Arc<spin::Mutex<Window>> {
         let buffer_size = initial.width * initial.height * RGBA_BYTES_PER_PIXEL;
         let buffer = vec![0; buffer_size];
 
         let window = Arc::new(spin::Mutex::new(Window {
+            name,
             coordinates: initial,
             buffer,
         }));
 
-        self.windows.push(Arc::clone(&window));
+        self.windows.lock().push(Arc::clone(&window));
 
         window
     }
@@ -147,8 +173,12 @@ impl Draw for Screen {
     }
 
     /// Set a pixel on the screen
-    fn write_pixel(&mut self, row: usize, col: usize, colour: Colour) {
-        let offset = (row * self.width() + col) * RGBA_BYTES_PER_PIXEL;
+    fn write_pixel(&mut self, row: isize, col: isize, colour: Colour) {
+        if col < 0 || col >= self.width() as isize || row < 0 || row >= self.height() as isize {
+            return;
+        }
+
+        let offset = (row as usize * self.width() + col as usize) * RGBA_BYTES_PER_PIXEL;
         let pixel = &mut self.back_buffer[offset..offset + RGBA_BYTES_PER_PIXEL];
 
         pixel[..3].copy_from_slice(&[colour.r, colour.g, colour.b]);

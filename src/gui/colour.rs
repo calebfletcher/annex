@@ -80,6 +80,8 @@ pub static BLACK: Colour = Colour::new(0x00, 0x00, 0x00);
 #[allow(dead_code)]
 pub static GREY: Colour = Colour::new(0x20, 0x20, 0x20);
 #[allow(dead_code)]
+pub static LIGHT_GREY: Colour = Colour::new(0x40, 0x40, 0x40);
+#[allow(dead_code)]
 pub static WHITE: Colour = Colour::new(0xFF, 0xFF, 0xFF);
 #[allow(dead_code)]
 pub static RED: Colour = Colour::new(0xFF, 0x00, 0x00);

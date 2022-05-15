@@ -9,7 +9,7 @@ pub struct Font {
 }
 
 impl Font {
-    pub fn new(weight: FontWeight, size: BitmapHeight, colour: TextColour) -> Self {
+    pub const fn new(weight: FontWeight, size: BitmapHeight, colour: TextColour) -> Self {
         Self {
             weight,
             size,
@@ -20,8 +20,8 @@ impl Font {
     pub fn write_char(
         &self,
         surface: &mut impl Draw,
-        base_row: usize,
-        base_col: usize,
+        base_row: isize,
+        base_col: isize,
         c: char,
     ) -> Option<usize> {
         let font = noto_sans_mono_bitmap::get_bitmap(c, self.weight, self.size)?;
@@ -29,8 +29,8 @@ impl Font {
         // Iterate over each pixel in the bitmap
         for (row_i, &row) in font.bitmap().iter().enumerate() {
             for (col_i, &pixel) in row.iter().enumerate() {
-                let pixel_row = base_row + row_i;
-                let pixel_col = base_col + col_i;
+                let pixel_row = base_row + row_i as isize;
+                let pixel_col = base_col + col_i as isize;
 
                 surface.write_pixel(
                     pixel_row,
@@ -46,17 +46,17 @@ impl Font {
     pub fn write(
         &self,
         surface: &mut impl Draw,
-        base_row: usize,
-        base_col: usize,
+        base_row: isize,
+        base_col: isize,
         s: &str,
     ) -> Option<usize> {
         let mut offset = 0;
         for c in s.chars() {
             if let Some(width) = self.write_char(surface, base_row, base_col + offset, c) {
-                offset += width;
+                offset += width as isize;
             }
         }
 
-        Some(offset)
+        Some(offset as usize)
     }
 }

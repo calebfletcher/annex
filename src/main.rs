@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use alloc::format;
+use alloc::{borrow::ToOwned, format};
 use annex::{
     cmos,
     gui::{self, colour, Draw},
@@ -76,7 +76,7 @@ fn task_screen_update() -> ! {
         .clear(colour::GREY);
 
     let initial = gui::Coordinates::new(0, 0, 300, 150);
-    let window = gui::new_window(initial);
+    let window = gui::new_window("DVD".to_owned(), initial);
     window.lock().clear(colour::BLUE);
 
     let screen_width = gui::screen::SCREEN.try_get().unwrap().lock().width();
@@ -127,7 +127,7 @@ fn task_clock() -> ! {
     interrupts::enable();
 
     let initial = gui::Coordinates::new(60, 50, 300, 150);
-    let window = gui::new_window(initial);
+    let window = gui::new_window("Clock".to_owned(), initial);
     window.lock().clear(colour::GREEN);
 
     let font = Font::new(

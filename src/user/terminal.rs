@@ -93,9 +93,12 @@ impl TextConsole {
                 self.newline();
             }
             _ => {
-                let width = self
-                    .font
-                    .write_char(&mut *self.window.lock(), self.row, self.col, c);
+                let width = self.font.write_char(
+                    &mut *self.window.lock(),
+                    self.row as isize,
+                    self.col as isize,
+                    c,
+                );
                 if let Some(width) = width {
                     self.col += width;
                     if self.col >= self.window.lock().width() {

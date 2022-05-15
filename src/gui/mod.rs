@@ -1,4 +1,4 @@
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use self::colour::{Colour, RGBA_BYTES_PER_PIXEL};
 
@@ -17,7 +17,7 @@ pub trait Draw {
         }
     }
 
-    fn write_pixel(&mut self, row: usize, col: usize, colour: Colour);
+    fn write_pixel(&mut self, row: isize, col: isize, colour: Colour);
 
     fn write_row(&mut self, row: usize, colour: Colour);
 
@@ -51,8 +51,17 @@ impl Coordinates {
 }
 
 pub struct Window {
+    name: String,
     pub coordinates: Coordinates,
     buffer: Vec<u8>,
+}
+
+impl Window {
+    /// Get a reference to the window's name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 }
 
 impl Draw for Window {
@@ -65,8 +74,12 @@ impl Draw for Window {
     }
 
     /// Set a pixel on the screen
-    fn write_pixel(&mut self, row: usize, col: usize, colour: Colour) {
-        let offset = (row * self.width() + col) * RGBA_BYTES_PER_PIXEL;
+    fn write_pixel(&mut self, row: isize, col: isize, colour: Colour) {
+        if col < 0 || col >= self.width() as isize || row < 0 || row >= self.height() as isize {
+            return;
+        }
+
+        let offset = (row as usize * self.width() + col as usize) * RGBA_BYTES_PER_PIXEL;
         let pixel = &mut self.buffer[offset..offset + RGBA_BYTES_PER_PIXEL];
 
         pixel[..3].copy_from_slice(&[colour.r, colour.g, colour.b]);
@@ -94,6 +107,10 @@ impl Draw for Window {
     }
 }
 
-pub fn new_window(initial: Coordinates) -> Arc<spin::Mutex<Window>> {
-    screen::SCREEN.try_get().unwrap().lock().new_window(initial)
+pub fn new_window(name: String, initial: Coordinates) -> Arc<spin::Mutex<Window>> {
+    screen::SCREEN
+        .try_get()
+        .unwrap()
+        .lock()
+        .new_window(name, initial)
 }

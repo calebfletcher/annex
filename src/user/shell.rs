@@ -19,7 +19,10 @@ struct Shell {
 
 impl Shell {
     fn new() -> Self {
-        let window = gui::new_window(gui::Coordinates::new(100, 300, 400, 200));
+        let window = gui::new_window(
+            "Shell".to_owned(),
+            gui::Coordinates::new(100, 300, 400, 200),
+        );
         let terminal = Terminal::new(window);
 
         let editor = line_edit::Editor::new(keyboard::KeyStream::new());
