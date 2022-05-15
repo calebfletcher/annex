@@ -109,9 +109,9 @@ impl TextColour {
     pub fn lerp(&self, amount: f32) -> Option<Colour> {
         let (fg, bg) = (self.foreground, self.background);
         Some(Colour {
-            r: (bg.r as f32 + ((fg.r - bg.r) as f32 * amount)) as u8,
-            g: (bg.g as f32 + ((fg.g - bg.g) as f32 * amount)) as u8,
-            b: (bg.b as f32 + ((fg.b - bg.b) as f32 * amount)) as u8,
+            r: (bg.r as f32 + ((fg.r as f32 - bg.r as f32) * amount)) as u8,
+            g: (bg.g as f32 + ((fg.g as f32 - bg.g as f32) * amount)) as u8,
+            b: (bg.b as f32 + ((fg.b as f32 - bg.b as f32) * amount)) as u8,
         })
     }
 }
