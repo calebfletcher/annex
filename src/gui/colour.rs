@@ -1,5 +1,7 @@
 use core::str::FromStr;
 
+pub const RGBA_BYTES_PER_PIXEL: usize = 4;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Colour {
     pub r: u8,
@@ -99,6 +101,11 @@ impl TextColour {
             background,
         }
     }
+
+    /// Linearly interpolate between the foreground and background colours.
+    ///
+    /// A value of 0 produces the background colour, a value of 1 produces the
+    /// foreground colour.
     pub fn lerp(&self, amount: f32) -> Option<Colour> {
         let (fg, bg) = (self.foreground, self.background);
         Some(Colour {

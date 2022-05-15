@@ -60,17 +60,16 @@ fn general_handler(_stack_frame: InterruptStackFrame, index: u8, _error_code: Op
 
 extern "x86-interrupt" fn ioapic_keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe { apic::LAPIC.try_get().unwrap().lock().end_of_interrupt() };
+
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
-    crate::task::keyboard::add_scancode(scancode);
+    crate::hardware::keyboard::process_keyboard(scancode);
 }
 
 extern "x86-interrupt" fn apic_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe { apic::LAPIC.try_get().unwrap().lock().end_of_interrupt() };
 
-    //serial_println!("starting interrupt");
     threading::yield_now();
-    //serial_println!("continuing interrupt");
 }
 
 #[naked]

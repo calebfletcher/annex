@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use spin::Mutex;
 
 use crate::{
-    colour::{self},
+    gui::colour,
     gui::{Draw, Window},
     serial_println,
 };
@@ -47,18 +47,17 @@ impl TextConsole {
     /// window, i.e. will seem to have been moved `n` lines down in the content.
     pub fn scroll_by(&mut self, n: usize) {
         let pixel_delta = n * self.line_height;
+        let height = self.window.lock().height();
 
         // Move existing content up
-        for new_row in 0..(self.window.lock().height() - pixel_delta).max(0) {
+        for new_row in 0..(height - pixel_delta).max(0) {
             let old_row = new_row + pixel_delta;
 
             self.window.lock().copy_row(old_row, new_row);
         }
 
         // Blank lines that have come in
-        for new_row in
-            (self.window.lock().height() - pixel_delta).max(0)..self.window.lock().height()
-        {
+        for new_row in (height - pixel_delta).max(0)..height {
             self.window.lock().write_row(new_row, colour::BLACK);
         }
     }

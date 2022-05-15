@@ -1,3 +1,4 @@
+use core::fmt::Write;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use uart_16550::SerialPort;
@@ -13,12 +14,11 @@ lazy_static! {
 
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
-    use core::fmt::Write;
     interrupts::without_interrupts(|| {
         SERIAL1
             .lock()
             .write_fmt(args)
-            .expect("Printing to serial failed");
+            .expect("printing to serial failed");
     });
 }
 
@@ -26,7 +26,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
 #[macro_export]
 macro_rules! serial_print {
     ($($arg:tt)*) => {
-        $crate::serial::_print(format_args!($($arg)*))
+        $crate::hardware::serial::_print(format_args!($($arg)*))
     };
 }
 

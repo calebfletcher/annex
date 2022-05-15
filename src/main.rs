@@ -8,8 +8,7 @@
 extern crate alloc;
 
 use annex::{
-    colour,
-    gui::{self, Draw},
+    gui::{self, colour, Draw},
     task::{executor::Executor, Task},
     threading,
 };
@@ -67,11 +66,18 @@ fn task_idle() -> ! {
 
 fn task_screen_update() -> ! {
     interrupts::enable();
-    gui::SCREEN.try_get().unwrap().lock().clear(colour::GREY);
+    gui::screen::SCREEN
+        .try_get()
+        .unwrap()
+        .lock()
+        .clear(colour::GREY);
 
     let initial = gui::Coordinates::new(0, 0, 300, 150);
-    let window = gui::SCREEN.try_get().unwrap().lock().new_window(initial);
+    let window = gui::new_window(initial);
     window.lock().clear(colour::BLUE);
+
+    let screen_width = gui::screen::SCREEN.try_get().unwrap().lock().width();
+    let screen_height = gui::screen::SCREEN.try_get().unwrap().lock().height();
 
     let mut moving_right = true;
     let mut moving_down = true;
@@ -79,14 +85,12 @@ fn task_screen_update() -> ! {
     let vertical_velocity = 3;
 
     loop {
-        gui::SCREEN.try_get().unwrap().lock().render();
+        gui::screen::SCREEN.try_get().unwrap().lock().render();
         let mut win = window.lock();
 
         if moving_right {
             win.coordinates.x += horizontal_velocity;
-            if win.coordinates.x + win.width() as isize
-                >= gui::SCREEN.try_get().unwrap().lock().width() as isize
-            {
+            if win.coordinates.x + win.width() as isize >= screen_width as isize {
                 moving_right = false;
                 win.coordinates.x -= horizontal_velocity;
             }
@@ -100,9 +104,7 @@ fn task_screen_update() -> ! {
 
         if moving_down {
             win.coordinates.y += vertical_velocity;
-            if win.coordinates.y + win.height() as isize
-                >= gui::SCREEN.try_get().unwrap().lock().height() as isize
-            {
+            if win.coordinates.y + win.height() as isize >= screen_height as isize {
                 moving_down = false;
                 win.coordinates.y -= vertical_velocity;
             }
@@ -122,7 +124,7 @@ fn task_clock() -> ! {
     interrupts::enable();
 
     let initial = gui::Coordinates::new(60, 30, 300, 150);
-    let window = gui::SCREEN.try_get().unwrap().lock().new_window(initial);
+    let window = gui::new_window(initial);
     window.lock().clear(colour::GREEN);
 
     loop {
@@ -134,7 +136,6 @@ fn task_async_executor() -> ! {
     interrupts::enable();
 
     let mut executor = Executor::new();
-    executor.spawn(Task::new(annex::task::keyboard::handle_keyboard()));
     executor.spawn(Task::new(annex::user::shell::run()));
 
     executor.run();

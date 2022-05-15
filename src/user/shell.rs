@@ -2,9 +2,9 @@ use core::fmt::Write;
 
 use alloc::{borrow::ToOwned, format, string::String, vec::Vec};
 
-use crate::{acpi, cmos, emulators, gui, hpet, screen::Terminal, task::keyboard, threading};
+use crate::{acpi, cmos, emulators, gui, hpet, task::keyboard, threading, utils::line_edit};
 
-use super::line_edit;
+use super::terminal::Terminal;
 
 pub async fn run() {
     let mut shell = Shell::new();
@@ -19,10 +19,7 @@ struct Shell {
 
 impl Shell {
     fn new() -> Self {
-        let screen = gui::SCREEN.try_get().unwrap();
-        let window = screen
-            .lock()
-            .new_window(gui::Coordinates::new(100, 300, 400, 200));
+        let window = gui::new_window(gui::Coordinates::new(100, 300, 400, 200));
         let terminal = Terminal::new(window);
 
         let editor = line_edit::Editor::new(keyboard::KeyStream::new());

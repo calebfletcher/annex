@@ -4,7 +4,7 @@ use alloc::{format, string::String};
 use futures_util::{Stream, StreamExt};
 use pc_keyboard::DecodedKey;
 
-use crate::screen::Terminal;
+use crate::user::terminal::Terminal;
 
 pub struct Editor<S>
 where

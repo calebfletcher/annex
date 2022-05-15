@@ -30,22 +30,21 @@ pub mod acpi;
 pub mod allocator;
 pub mod apic;
 pub mod cmos;
-pub mod colour;
 pub mod emulators;
 pub mod gdt;
 pub mod gui;
+pub mod hardware;
 pub mod hpet;
 pub mod interrupts;
 pub mod logger;
 pub mod memory;
 pub mod pic;
-pub mod screen;
-pub mod serial;
 pub mod task;
 #[allow(unused_imports)]
 pub mod test;
 pub mod threading;
 pub mod user;
+pub mod utils;
 
 extern crate alloc;
 
@@ -87,7 +86,6 @@ pub fn init(
     apic::init(apic_address);
 
     acpi::ACPI.try_get().unwrap().lock().ioapic();
-    task::keyboard::init();
     cmos::RTC
         .try_init_once(|| cmos::Rtc::new(acpi::ACPI.try_get().unwrap().lock().fadt().century))
         .unwrap();
