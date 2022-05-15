@@ -7,10 +7,13 @@
 
 extern crate alloc;
 
+use alloc::format;
 use annex::{
+    cmos,
     gui::{self, colour, Draw},
     task::{executor::Executor, Task},
     threading,
+    utils::font::Font,
 };
 use log::info;
 use x86_64::{
@@ -123,11 +126,20 @@ fn task_screen_update() -> ! {
 fn task_clock() -> ! {
     interrupts::enable();
 
-    let initial = gui::Coordinates::new(60, 30, 300, 150);
+    let initial = gui::Coordinates::new(60, 50, 300, 150);
     let window = gui::new_window(initial);
     window.lock().clear(colour::GREEN);
 
+    let font = Font::new(
+        noto_sans_mono_bitmap::FontWeight::Regular,
+        noto_sans_mono_bitmap::BitmapHeight::Size14,
+        colour::TextColour::new(colour::BLACK, colour::GREEN),
+    );
+
     loop {
+        let time = cmos::RTC.try_get().unwrap().time();
+        let time_string = format!("{}", time.format("%Y/%m/%d %H:%M:%S"));
+        font.write(&mut *window.lock(), 10, 10, &time_string);
         threading::sleep(threading::Deadline::relative(100_000_000));
     }
 }
