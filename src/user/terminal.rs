@@ -5,12 +5,12 @@ use crate::{
     gui::colour,
     gui::{Draw, Window},
     serial_println,
+    utils::font::Font,
 };
 
 pub struct TextConsole {
     window: Arc<Mutex<Window>>,
-    font_weight: noto_sans_mono_bitmap::FontWeight,
-    font_size: noto_sans_mono_bitmap::BitmapHeight,
+    font: Font,
     line_height: usize,
     row: usize,
     col: usize,
@@ -24,8 +24,7 @@ impl TextConsole {
         Self {
             window,
             line_height: font_size.val() + 2,
-            font_weight,
-            font_size,
+            font: Font::new(font_weight, font_size, colour::WHITE_ON_BLACK),
             row: 0,
             col: 0,
         }
@@ -94,9 +93,10 @@ impl TextConsole {
                 self.newline();
             }
             _ => {
-                if let Some(width) =
-                    self.write_char_at(self.row, self.col, c, colour::WHITE_ON_BLACK)
-                {
+                let width = self
+                    .font
+                    .write_char(&mut *self.window.lock(), self.row, self.col, c);
+                if let Some(width) = width {
                     self.col += width;
                     if self.col >= self.window.lock().width() {
                         self.newline();
@@ -104,32 +104,6 @@ impl TextConsole {
                 }
             }
         };
-    }
-
-    pub fn write_char_at(
-        &mut self,
-        base_row: usize,
-        base_col: usize,
-        c: char,
-        colour: colour::TextColour,
-    ) -> Option<usize> {
-        if let Some(font) = noto_sans_mono_bitmap::get_bitmap(c, self.font_weight, self.font_size) {
-            for (row_i, &row) in font.bitmap().iter().enumerate() {
-                for (col_i, &pixel) in row.iter().enumerate() {
-                    let pixel_row = base_row + row_i;
-                    let pixel_col = base_col + col_i;
-
-                    self.window.lock().write_pixel(
-                        pixel_row,
-                        pixel_col,
-                        colour.lerp(pixel as f32 / 255.0).unwrap(),
-                    );
-                }
-            }
-            Some(font.width())
-        } else {
-            None
-        }
     }
 }
 
