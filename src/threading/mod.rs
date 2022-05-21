@@ -18,7 +18,7 @@ pub struct ContextSwitchResponse {
 #[no_mangle]
 pub unsafe extern "C" fn context_switch() -> ContextSwitchResponse {
     unsafe {
-        scheduler::with_scheduler(|s| {
+        scheduler::with_scheduler_from_irq(|s| {
             if let Some((prev_thread_id, next_thread_id)) = s.schedule() {
                 let (previous, next) = s.thread_pointers(prev_thread_id, next_thread_id);
                 ContextSwitchResponse { previous, next }

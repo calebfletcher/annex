@@ -129,6 +129,18 @@ impl Thread {
     pub fn add_time(&mut self, value: u64) {
         self.time += value;
     }
+
+    /// Get a reference to the thread's stack.
+    #[must_use]
+    pub fn stack(&self) -> Option<&Stack> {
+        self.stack.as_ref()
+    }
+
+    /// Get the thread's stack top.
+    #[must_use]
+    pub fn stack_top(&self) -> VirtAddr {
+        self.stack_top
+    }
 }
 
 impl PartialOrd for Thread {
@@ -174,7 +186,6 @@ impl Stack {
         stack[stack_size - 3] = 0x202; // return rflags (reserved flag set)
         stack[stack_size - 4] = 0x8; // return cs
         stack[stack_size - 5] = entry as *const () as u64; // return rip
-                                                           //stack[stack_size - 5] = 0xDEADBFEF; // return rip
         stack[stack_size - 12] = &stack[stack_size - 1] as *const u64 as u64; // rbp, should be same as return rsp
 
         Self { buffer: stack }

@@ -77,6 +77,7 @@ extern "C" fn context_switch_handler() {
     unsafe {
         asm!(
             "
+        cli
     // 4:  
     //    jmp 4b
 
@@ -138,6 +139,7 @@ extern "C" fn context_switch_handler() {
     // 4:  
     //     jmp 4b
 
+        sti
         iretq
     ",
             options(noreturn)

@@ -21,7 +21,7 @@ pub fn init(addr: VirtAddr) {
                 .error_vector(62)
                 .spurious_vector(0xFF)
                 .set_xapic_base(addr.as_u64())
-                .timer_divide(x2apic::lapic::TimerDivide::Div16)
+                .timer_divide(x2apic::lapic::TimerDivide::Div8)
                 .timer_mode(x2apic::lapic::TimerMode::Periodic)
                 .timer_initial(1_000_000)
                 .build()

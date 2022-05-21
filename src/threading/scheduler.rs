@@ -148,11 +148,6 @@ impl Scheduler {
             .set_state(ThreadState::Blocked(BlockReason::Other));
         let entry = self.sleeping_threads.entry(deadline);
         entry.or_default().insert(id);
-        // debug!(
-        //     "sleeping thread {} for {} ns",
-        //     id.as_usize(),
-        //     deadline.0 - hpet::nanoseconds()
-        // );
     }
 
     /// Get the current and next thread blocks as pointers.
@@ -170,6 +165,10 @@ impl Scheduler {
         (current_thread, next_thread)
     }
 
+    /// Schedule a new thread.
+    ///
+    /// Returns either Some((previous thread id, next thread id)), or None if
+    /// no context switch should occur.
     pub fn schedule(&mut self) -> Option<(ThreadId, ThreadId)> {
         if !self.active() {
             return None;
@@ -179,8 +178,6 @@ impl Scheduler {
         self.update_time_used();
 
         // Check on sleeping threads that have met their deadline
-        //trace!("checking sleeping threads");
-
         while let Some((deadline, threads)) = self.sleeping_threads.pop_first() {
             if deadline <= Deadline(hpet::nanoseconds()) {
                 for thread_id in threads {
@@ -190,12 +187,6 @@ impl Scheduler {
                         .set_state(ThreadState::ReadyToRun);
 
                     self.paused_threads.push_back(thread_id);
-
-                    // debug!(
-                    //     "woke thread {} at {} ns",
-                    //     thread_id.as_usize(),
-                    //     deadline.0 - hpet::nanoseconds()
-                    // );
                 }
             } else {
                 self.sleeping_threads.insert(deadline, threads);
@@ -305,6 +296,9 @@ pub unsafe fn with_scheduler_from_irq<F, T>(f: F) -> T
 where
     F: FnOnce(&mut Scheduler) -> T,
 {
-    let result = f(SCHEDULER.lock().get_or_insert_with(Scheduler::new));
+    let result = f(SCHEDULER
+        .try_lock()
+        .unwrap()
+        .get_or_insert_with(Scheduler::new));
     result
 }
