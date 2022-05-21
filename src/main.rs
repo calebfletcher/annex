@@ -17,10 +17,7 @@ use annex::{
     utils::font::Font,
 };
 use log::info;
-use x86_64::{
-    instructions::{self, interrupts},
-    PhysAddr, VirtAddr,
-};
+use x86_64::{instructions, PhysAddr, VirtAddr};
 
 mod panic;
 
@@ -49,9 +46,9 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 
     threading::scheduler::with_scheduler(|s| {
         s.set_idle_thread(task_idle, 4096);
-        s.add_paused_thread("async", task_async_executor, 4096);
         s.add_paused_thread("screen", task_screen_update, 4096);
         s.add_paused_thread("clock", task_clock, 4096);
+        s.add_paused_thread("async", task_async_executor, 4096);
         s.set_active(true);
     });
 
@@ -61,7 +58,6 @@ fn entry_point(info: &'static mut bootloader::BootInfo) -> ! {
 }
 
 fn task_idle() -> ! {
-    interrupts::enable();
     loop {
         instructions::hlt();
         threading::yield_now();
@@ -69,13 +65,6 @@ fn task_idle() -> ! {
 }
 
 fn task_screen_update() -> ! {
-    interrupts::enable();
-    gui::screen::SCREEN
-        .try_get()
-        .unwrap()
-        .lock()
-        .clear(colour::GREY);
-
     let initial = gui::Coordinates::new(0, 0, 300, 150);
     let window = gui::new_window("DVD".to_owned(), initial);
     window.lock().clear(colour::BLUE);
@@ -139,29 +128,28 @@ fn task_screen_update() -> ! {
 }
 
 fn task_clock() -> ! {
-    interrupts::enable();
-
-    let initial = gui::Coordinates::new(60, 50, 300, 150);
+    let initial = gui::Coordinates::new(60, 50, 190, 84);
     let window = gui::new_window("Clock".to_owned(), initial);
     window.lock().clear(colour::GREEN);
 
     let font = Font::new(
         noto_sans_mono_bitmap::FontWeight::Regular,
-        noto_sans_mono_bitmap::BitmapHeight::Size14,
+        noto_sans_mono_bitmap::BitmapHeight::Size32,
         colour::TextColour::new(colour::BLACK, colour::GREEN),
     );
 
     loop {
         let time = cmos::RTC.try_get().unwrap().time();
-        let time_string = format!("{}", time.format("%Y/%m/%d %H:%M:%S"));
-        font.write(&mut *window.lock(), 10, 10, &time_string);
+        let date_string = format!("{}", time.format("%Y/%m/%d"));
+        let time_string = format!("{}", time.format("%H:%M:%S"));
+
+        font.write(&mut *window.lock(), 10, 10, &date_string);
+        font.write(&mut *window.lock(), 42, 10, &time_string);
         threading::sleep(threading::Deadline::relative(100_000_000));
     }
 }
 
 fn task_async_executor() -> ! {
-    interrupts::enable();
-
     let mut executor = Executor::new();
     executor.spawn(Task::new(annex::user::shell::run()));
 

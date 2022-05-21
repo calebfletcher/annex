@@ -28,6 +28,7 @@ log = { version = "0.4.16", default-features = false }
 noto-sans-mono-bitmap = { version = "0.1.5", features = [
     "regular",
     "size_14",
+    "size_32",
 ], default-features = false }
 pc-keyboard = "0.5.1"
 pic8259 = "0.10.2"
