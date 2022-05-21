@@ -11,3 +11,10 @@ The UEFI firmware for QEMU is 'OVMF-pure-efi.fd' from here: https://github.com/r
 ```
 sudo dd if=target/x86_64-annex/release/boot-uefi-annex.img of=/dev/sdX
 ```
+
+# Debugging Tips and Tricks
+Get current thread:
+```
+print annex::threading::scheduler::SCHEDULER.inner.data.value.0.current_thread_id.0
+print annex::threading::scheduler::SCHEDULER.inner.data.value.0.threads.root.0.node.pointer.vals[0].value.value.state
+```
