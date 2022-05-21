@@ -208,16 +208,29 @@ impl Scheduler {
         // Get next thread with round robin scheduler
         let mut next_thread_id = self.next_thread();
 
+        // Check if the current thread still wants to run
         if next_thread_id.is_none() && !self.is_idle_thread_active() {
-            // Thread currently executing is the only available thread
-            //trace!("current thread is only one available");
-            next_thread_id = Some(self.current_thread_id);
+            // Thread currently executing is the only available thread, but only if it still wants to run
+            if let Some(tcb) = self.threads.get(&self.current_thread_id) {
+                if tcb.state() == &ThreadState::Running {
+                    next_thread_id = Some(self.current_thread_id);
+                }
+            }
+        }
+
+        // If there really is no threads wanting to run, switch to idle thread
+        if next_thread_id.is_none() {
+            next_thread_id = self.idle_thread_id;
         }
 
         if let Some(next_id) = next_thread_id {
-            //trace!("switching to thread {:?}", next_id);
             // Update current thread id with next thread id
             let prev_thread_id = mem::replace(&mut self.current_thread_id, next_id);
+
+            // If the next thread is the same as the previous thread, don't context switch
+            if next_thread_id == Some(prev_thread_id) {
+                return None;
+            }
 
             // Update previous thread's state
             let previous_thread = self.threads.get_mut(&prev_thread_id).unwrap();
