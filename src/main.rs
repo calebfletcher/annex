@@ -11,6 +11,7 @@ use alloc::{borrow::ToOwned, format};
 use annex::{
     cmos,
     gui::{self, colour, Draw},
+    hpet,
     task::{executor::Executor, Task},
     threading,
     utils::font::Font,
@@ -87,6 +88,12 @@ fn task_screen_update() -> ! {
     let horizontal_velocity = 3;
     let vertical_velocity = 3;
 
+    let alpha = 0.4;
+    let mut last_smoothed_frame_time = 0.;
+
+    let frame_interval = 33_000_000;
+    let mut next_frame_start_time = hpet::nanoseconds();
+
     loop {
         gui::screen::SCREEN.try_get().unwrap().lock().render();
         let mut win = window.lock();
@@ -120,7 +127,14 @@ fn task_screen_update() -> ! {
             }
         }
 
-        threading::sleep(threading::Deadline::relative(10_000_000));
+        let elapsed = (hpet::nanoseconds() - next_frame_start_time) as f64 / 1e6;
+        last_smoothed_frame_time = alpha * elapsed + (1. - alpha) * last_smoothed_frame_time;
+
+        let current_time = hpet::nanoseconds();
+        while next_frame_start_time < current_time {
+            next_frame_start_time += frame_interval;
+        }
+        threading::sleep(threading::Deadline::absolute(next_frame_start_time));
     }
 }
 
