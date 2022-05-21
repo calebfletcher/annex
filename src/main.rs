@@ -113,7 +113,8 @@ fn task_screen_update() -> ! {
             }
         } else {
             win.coordinates.y -= vertical_velocity;
-            if win.coordinates.y < 0 {
+            // The 20 here is the height of the title block
+            if win.coordinates.y < 20 {
                 moving_down = true;
                 win.coordinates.y += vertical_velocity;
             }
