@@ -28,8 +28,9 @@ image: kernel
     sudo cp {{bin_file}} {{mount_dir}}/
     sudo umount {{mount_dir}}
 
-qemu-raw: kernel
-    {{qemu_cmd}} {{qemu_machine}} -s -bios {{elf_file}}
+# NOTE: This no longer works due to changes in the linkerscript
+# qemu-raw: kernel
+#     {{qemu_cmd}} {{qemu_machine}} -s -bios {{elf_file}}
 
 qemu: image
     {{qemu_cmd}} {{qemu_machine}} -s -kernel {{u-boot_path}} -device virtio-blk-device,drive=hd0 -drive if=none,format=raw,id=hd0,file={{img_file}}
