@@ -32,6 +32,6 @@ macro_rules! print {
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($fmt:expr) => ($crate::print!(concat!($fmt, "\n")));
-    ($fmt:expr, $($arg:tt)*) => ($crate::serial_print!(
+    ($fmt:expr, $($arg:tt)*) => ($crate::print!(
         concat!($fmt, "\n"), $($arg)*));
 }

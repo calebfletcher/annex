@@ -2,9 +2,9 @@
  
 .option norvc
  
-.type start, @function
-.global start
-start:
+.type _start, @function
+.global _start
+_start:
 	.cfi_startproc
  
 .option push
