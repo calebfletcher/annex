@@ -1,0 +1,8 @@
+/target
+
+
+# Build files
+img_mount/
+out.elf
+test.img
+boot.bin
