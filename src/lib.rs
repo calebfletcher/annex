@@ -1,30 +1,19 @@
 #![no_std]
 #![no_main]
+#![feature(panic_info_message)]
 
 global_asm!(include_str!("asm/boot.S"));
 
-use core::{
-    arch::{asm, global_asm},
-    panic::PanicInfo,
-};
+use core::arch::{asm, global_asm};
+
+mod panic;
+mod serial;
 
 #[no_mangle]
 pub extern "C" fn kmain() -> ! {
-    unsafe {
-        let uart_ptr = 0x10000000 as *mut u8;
-        uart_ptr.write_volatile(b'A');
-        uart_ptr.write_volatile(b'N');
-        uart_ptr.write_volatile(b'N');
-        uart_ptr.write_volatile(b'E');
-        uart_ptr.write_volatile(b'X');
-    }
+    println!("\n\nBooting ANNEX Kernel\n\n");
 
-    abort();
-}
-
-#[panic_handler]
-fn panic_handler(_info: &PanicInfo) -> ! {
-    abort();
+    panic!("kernel terminated");
 }
 
 #[no_mangle]
