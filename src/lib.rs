@@ -9,6 +9,8 @@ use core::{
     ffi::CStr,
 };
 
+use fdt::Fdt;
+
 mod panic;
 mod serial;
 
@@ -17,20 +19,20 @@ pub extern "C" fn kmain(argc: usize, argv: usize) -> ! {
     if argc < 2 {
         panic!("no device tree passed in command line arguments");
     }
-    let dtb_addr = unsafe {
+    let dtb = unsafe {
         // Horrible hack to get a c-style argv argument from uboot
         let dtb_addr_ptr = *(argv as *const u64).offset(1) as *const i8;
         let dtb_addr_str = CStr::from_ptr(dtb_addr_ptr).to_str().unwrap();
-        usize::from_str_radix(dtb_addr_str, 16).unwrap() as *const usize
+        let dtb_ptr = usize::from_str_radix(dtb_addr_str, 16).unwrap() as *const u8;
+        println!("found device tree at {:p}", dtb_ptr);
+        Fdt::from_ptr(dtb_ptr).unwrap()
     };
 
-    entrypoint(dtb_addr);
+    entrypoint(dtb);
 }
 
-fn entrypoint(dtb_addr: *const usize) -> ! {
-    println!("\nBooting ANNEX Kernel\n");
-
-    println!("found device tree at {:p}", dtb_addr);
+fn entrypoint(dtb: Fdt) -> ! {
+    println!("Booting ANNEX Kernel");
 
     panic!("kernel terminated");
 }
