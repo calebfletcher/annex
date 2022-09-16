@@ -1,7 +1,7 @@
 qemu_cmd := "qemu-system-riscv64"
 qemu_machine := "-M virt -smp 4 -nographic -m 1G"
 u-boot_path := "../../u-boot/u-boot.bin"
-out_dir := "target/riscv64gc-unknown-none-elf/debug/"
+out_dir := "target/riscv64gc-unknown-none-elf/release/"
 lib_file := out_dir + "libannex_risc_v.a"
 elf_file := out_dir + "kernel.elf"
 bin_file := out_dir + "boot.bin"
@@ -19,7 +19,7 @@ image-init:
     mkdir -p {{mount_dir}}
 
 kernel:
-    cargo b
+    cargo b --release
     riscv64-unknown-elf-gcc -T src/lds/virt.lds -o {{elf_file}} -nostdlib {{lib_file}}
 
 image: kernel
