@@ -20,8 +20,8 @@ mount_dir := "./img_mount"
 u-boot_path := u-boot_dir + "u-boot.bin"
 lib_file := out_dir + "libannex_risc_v.a"
 elf_file := out_dir + "kernel.elf"
-bin_file := out_dir + "boot.bin"
-uimage_file := out_dir + "output.uimage"
+bin_file := out_dir + "kernel.bin"
+uimage_file := out_dir + "kernel.uimage"
 img_file := out_dir + "kernel.img"
 
 # Clean the build artifacts
