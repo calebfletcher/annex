@@ -11,6 +11,7 @@ use log::{debug, error, info, warn};
 use sbi::system_reset::{ResetReason, ResetType};
 
 mod logger;
+mod memory;
 mod panic;
 
 #[no_mangle]
@@ -33,13 +34,15 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
             .starting_address,
     );
 
-    info!("Booting ANNEX Kernel");
-    debug!("Currently running on hart {}", hart_id);
+    info!("booting ANNEX kernel");
+    debug!("currently running on hart {}", hart_id);
 
-    debug!("Hart Status:");
+    debug!("hart status:");
     for hart in fdt.cpus().flat_map(|cpu| cpu.ids().all()) {
         debug!("  {}: {:?}", hart, sbi::hsm::hart_status(hart).unwrap());
     }
+
+    memory::init(fdt.memory().regions());
 
     halt();
 }
