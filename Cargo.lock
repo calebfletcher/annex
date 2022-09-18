@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "fdt",
  "lazy_static",
+ "sbi",
  "spin 0.9.4",
  "uart_16550",
 ]
@@ -44,6 +45,12 @@ name = "rustversion"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97477e48b4cf8603ad5f7aaf897467cf42ab4218a38ef76fb14c2d6773a6d6a8"
+
+[[package]]
+name = "sbi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29cb0870400aca7e4487e8ec1e93f9d4288da763cb1da2cedc5102e62b6522ad"
 
 [[package]]
 name = "spin"

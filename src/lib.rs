@@ -7,6 +7,7 @@ global_asm!(include_str!("asm/boot.S"));
 use core::arch::{asm, global_asm};
 
 use fdt::Fdt;
+use sbi::system_reset::{ResetReason, ResetType};
 
 mod panic;
 mod serial;
@@ -22,42 +23,13 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
     println!("Booting ANNEX Kernel");
     println!("Currently running on hart {}", hart_id);
 
-    println!(
-        "This is a devicetree representation of a {}",
-        fdt.root().model()
-    );
-    println!(
-        "...which is compatible with at least: {}",
-        fdt.root().compatible().first()
-    );
-    println!("...and has {} CPU(s)", fdt.cpus().count());
-    println!(
-        "...and has at least one memory location at: {:#X}\n",
-        fdt.memory().regions().next().unwrap().starting_address as usize
-    );
-
-    let chosen = fdt.chosen();
-    if let Some(bootargs) = chosen.bootargs() {
-        println!("The bootargs are: {:?}", bootargs);
+    for hart in 0..fdt.cpus().count() {
+        println!("hart {}: {:?}", hart, sbi::hsm::hart_status(hart).unwrap());
     }
 
-    if let Some(stdout) = chosen.stdout() {
-        println!("It would write stdout to: {}", stdout.name);
-    }
-
-    let soc = fdt.find_node("/soc");
-    println!(
-        "Does it have a `/soc` node? {}",
-        if soc.is_some() { "yes" } else { "no" }
-    );
-    if let Some(soc) = soc {
-        println!("...and it has the following children:");
-        for child in soc.children() {
-            println!("    {}", child.name);
-        }
-    }
-
-    panic!("kernel terminated");
+    //panic!("kernel terminated");
+    sbi::system_reset::system_reset(ResetType::Shutdown, ResetReason::NoReason).unwrap();
+    unreachable!("kernel exit");
 }
 
 #[no_mangle]
