@@ -12,7 +12,6 @@ use sbi::system_reset::{ResetReason, ResetType};
 
 mod logger;
 mod panic;
-mod serial;
 
 #[no_mangle]
 pub extern "C" fn kmain(hart_id: usize, fdt_addr: usize) -> ! {
@@ -22,7 +21,17 @@ pub extern "C" fn kmain(hart_id: usize, fdt_addr: usize) -> ! {
 }
 
 fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
-    logger::init();
+    logger::init(
+        fdt.chosen()
+            .stdout()
+            .or_else(|| fdt.find_node("/soc/uart"))
+            .unwrap()
+            .reg()
+            .unwrap()
+            .next()
+            .unwrap()
+            .starting_address,
+    );
 
     info!("Booting ANNEX Kernel");
     debug!("Currently running on hart {}", hart_id);
@@ -32,17 +41,20 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
         debug!("  {}: {:?}", hart, sbi::hsm::hart_status(hart).unwrap());
     }
 
-    warn!("kernel terminated");
-    sbi::system_reset::system_reset(ResetType::Shutdown, ResetReason::NoReason).unwrap();
-    unreachable!("kernel exit");
+    halt();
 }
 
-#[no_mangle]
-extern "C" fn abort() -> ! {
+fn abort() -> ! {
     error!("aborting execution");
     loop {
         unsafe {
             asm!("wfi");
         }
     }
+}
+
+fn halt() -> ! {
+    warn!("kernel terminated");
+    sbi::system_reset::system_reset(ResetType::Shutdown, ResetReason::NoReason).unwrap();
+    abort();
 }
