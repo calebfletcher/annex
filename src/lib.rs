@@ -7,8 +7,10 @@ global_asm!(include_str!("asm/boot.S"));
 use core::arch::{asm, global_asm};
 
 use fdt::Fdt;
+use log::{debug, error, info, warn};
 use sbi::system_reset::{ResetReason, ResetType};
 
+mod logger;
 mod panic;
 mod serial;
 
@@ -20,20 +22,24 @@ pub extern "C" fn kmain(hart_id: usize, fdt_addr: usize) -> ! {
 }
 
 fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
-    println!("Booting ANNEX Kernel");
-    println!("Currently running on hart {}", hart_id);
+    logger::init();
 
-    for hart in 0..fdt.cpus().count() {
-        println!("hart {}: {:?}", hart, sbi::hsm::hart_status(hart).unwrap());
+    info!("Booting ANNEX Kernel");
+    debug!("Currently running on hart {}", hart_id);
+
+    debug!("Hart Status:");
+    for hart in fdt.cpus().flat_map(|cpu| cpu.ids().all()) {
+        debug!("  {}: {:?}", hart, sbi::hsm::hart_status(hart).unwrap());
     }
 
-    //panic!("kernel terminated");
+    warn!("kernel terminated");
     sbi::system_reset::system_reset(ResetType::Shutdown, ResetReason::NoReason).unwrap();
     unreachable!("kernel exit");
 }
 
 #[no_mangle]
 extern "C" fn abort() -> ! {
+    error!("aborting execution");
     loop {
         unsafe {
             asm!("wfi");

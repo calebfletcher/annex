@@ -1,11 +1,13 @@
 use core::panic::PanicInfo;
 
+use log::error;
+
 use crate::{print, println};
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("kernel panic :(");
-    print!("panicked at ");
+    error!("kernel panic :(");
+    print!("panicked at: ");
 
     if let Some(&message) = info.message() {
         print!("'{}', ", message);
