@@ -11,4 +11,4 @@ While these steps will be slightly hardware-specific, these are the steps to loa
 1. `fatload virtio 0 0x84000000 kernel.uimage`
 2. `bootm 0x84000000 - ${fdtcontroladdr}`
 
-This can be configured in U-Boot as the default command, by setting `CONFIG_BOOTCOMMAND` to be these two steps. Ensure that the 
+This can be configured in U-Boot as the default command, by setting `CONFIG_BOOTCOMMAND` to be these two steps.
