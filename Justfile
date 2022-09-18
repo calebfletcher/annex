@@ -24,42 +24,52 @@ bin_file := out_dir + "boot.bin"
 uimage_file := out_dir + "output.uimage"
 img_file := out_dir + "kernel.img"
 
+# Clean the build artifacts
 clean:
     cargo clean
     rm -rf {{mount_dir}}
 
+# Build the kernel ELF
 kernel:
     cargo b --profile {{ if profile == "debug" { "dev" } else { "release" } }}
     {{compiler_prefix}}gcc -T src/lds/virt.lds -o {{elf_file}} -nostdlib {{lib_file}}
 
+# Convert the ELF file to a raw binary executable
 binary: kernel
     {{compiler_prefix}}objcopy {{elf_file}} -O binary {{bin_file}}
 
+# Initialise an image file with a FAT partition
 image-init:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -f {{img_file}} ]; then
         dd if=/dev/zero of={{img_file}} count={{image_size_mb}} bs=1M status=none
-        sudo parted -a optimal {{img_file}} mklabel msdos mkpart primary 0G 100%
+        sudo parted {{img_file}} mklabel msdos mkpart primary 2048s 100%
         mkfs.fat {{img_file}}
         mkdir -p {{mount_dir}}
     fi
 
+# Mount the image and copy a file into it
 image file: image-init
     sudo mount {{img_file}} {{mount_dir}}
     sudo cp {{file}} {{mount_dir}}/
     sudo umount {{mount_dir}}
 
+# Create a raw image
 raw-image: binary && (image bin_file)
 
+# Create a uImage-based image
 uimage: binary && (image uimage_file)
     {{u-boot_dir}}tools/mkimage -A riscv -O linux -T kernel -C none -a {{load_addr}} -e {{entrypoint_addr}} -n {{uimage_name}} -d {{bin_file}} {{uimage_file}}
 
+# Emulate the kernel with the raw ELF kernel
 qemu-raw: kernel
     {{qemu_cmd}} {{qemu_machine}} -s -kernel {{elf_file}}
 
+# Emulate the kernel through U-Boot
 qemu-uboot: uimage
     {{qemu_cmd}} {{qemu_machine}} -s -kernel {{u-boot_path}} -device virtio-blk-device,drive=hd0 -drive if=none,format=raw,id=hd0,file={{img_file}}
 
+# Open GDB on the kernel
 gdb:
     {{compiler_prefix}}gdb {{elf_file}} -ex "target remote :1234" -ex "b pre_main"
