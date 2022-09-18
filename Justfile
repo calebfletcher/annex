@@ -1,39 +1,65 @@
+# Kernel Parameters
+load_addr := "0x80200000"
+entrypoint_addr := "0x80200000"
+uimage_name := "annex"
+image_size_mb := "10"
+profile := "release"
+
+# Emulation
 qemu_cmd := "qemu-system-riscv64"
-qemu_machine := "-M virt -smp 4 -nographic -m 1G"
-u-boot_path := "../../u-boot/u-boot.bin"
-out_dir := "target/riscv64gc-unknown-none-elf/release/"
+qemu_machine := "-M virt -smp 4 -nographic -m 1G -device qemu-xhci -device usb-kbd"
+
+# System Setup
+compiler_prefix := "riscv64-unknown-elf-"
+out_dir := "target/riscv64gc-unknown-none-elf/" + profile + "/"
+u-boot_dir := "../../u-boot/"
+mount_dir := "./img_mount"
+
+
+# File Paths
+u-boot_path := u-boot_dir + "u-boot.bin"
 lib_file := out_dir + "libannex_risc_v.a"
 elf_file := out_dir + "kernel.elf"
 bin_file := out_dir + "boot.bin"
-img_file := "./kernel.img"
-mount_dir := "./img_mount"
+uimage_file := out_dir + "output.uimage"
+img_file := out_dir + "kernel.img"
 
 clean:
     cargo clean
-    rm -rf mount_dir
-
-image-init:
-    dd if=/dev/zero of={{img_file}} count=50 bs=1M
-    sudo parted -a optimal {{img_file}} mklabel msdos mkpart primary 0G 100%
-    mkfs.fat {{img_file}}
-    mkdir -p {{mount_dir}}
+    rm -rf {{mount_dir}}
 
 kernel:
-    cargo b --release
-    riscv64-unknown-elf-gcc -T src/lds/virt.lds -o {{elf_file}} -nostdlib {{lib_file}}
+    cargo b --profile {{ if profile == "debug" { "dev" } else { "release" } }}
+    {{compiler_prefix}}gcc -T src/lds/virt.lds -o {{elf_file}} -nostdlib {{lib_file}}
 
-image: kernel
-    riscv64-unknown-elf-objcopy {{elf_file}} -O binary {{bin_file}}
+binary: kernel
+    {{compiler_prefix}}objcopy {{elf_file}} -O binary {{bin_file}}
+
+image-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{img_file}} ]; then
+        dd if=/dev/zero of={{img_file}} count={{image_size_mb}} bs=1M status=none
+        sudo parted -a optimal {{img_file}} mklabel msdos mkpart primary 0G 100%
+        mkfs.fat {{img_file}}
+        mkdir -p {{mount_dir}}
+    fi
+
+image file: image-init
     sudo mount {{img_file}} {{mount_dir}}
-    sudo cp {{bin_file}} {{mount_dir}}/
+    sudo cp {{file}} {{mount_dir}}/
     sudo umount {{mount_dir}}
 
-# NOTE: This no longer works due to changes in the linkerscript
-# qemu-raw: kernel
-#     {{qemu_cmd}} {{qemu_machine}} -s -bios {{elf_file}}
+raw-image: binary && (image bin_file)
 
-qemu: image
+uimage: binary && (image uimage_file)
+    {{u-boot_dir}}tools/mkimage -A riscv -O linux -T kernel -C none -a {{load_addr}} -e {{entrypoint_addr}} -n {{uimage_name}} -d {{bin_file}} {{uimage_file}}
+
+qemu-raw: kernel
+    {{qemu_cmd}} {{qemu_machine}} -s -kernel {{elf_file}}
+
+qemu-uboot: uimage
     {{qemu_cmd}} {{qemu_machine}} -s -kernel {{u-boot_path}} -device virtio-blk-device,drive=hd0 -drive if=none,format=raw,id=hd0,file={{img_file}}
 
 gdb:
-    riscv64-unknown-elf-gdb {{elf_file}} -ex "target remote :1234" -ex "b pre_main"
+    {{compiler_prefix}}gdb {{elf_file}} -ex "target remote :1234" -ex "b pre_main"
