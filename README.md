@@ -20,6 +20,8 @@ CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv make -j12 tools u-boot.bin
 ## Usage
 To run the kernel directly under OpenSBI in QEMU, run `just qemu-raw`. To run it under U-Boot, run `just qemu-uboot`.
 
+To run the kernel on real hardware (presumably through U-Boot), run `just uimage` and either copy the resulting `kernel.uimage` to an SD card, or burn the `kernel.img` to the SD card directly.
+
 You can see the full list of available commands through `just -l`.
 
 ## U-Boot Configuration
