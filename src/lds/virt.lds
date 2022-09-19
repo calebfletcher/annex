@@ -8,6 +8,8 @@ SECTIONS {
 	.text : ALIGN(4K) {
 		*(.init);
 		*(.text);
+		. = ALIGN(4);
+		*(.trap_handler);
 	}
 	.bss : ALIGN(4K) {
 		PROVIDE(bss_start = .);

@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(naked_functions)]
 
 global_asm!(include_str!("asm/boot.S"));
 
@@ -10,6 +11,7 @@ use fdt::Fdt;
 use log::{debug, error, info, warn};
 use sbi::system_reset::{ResetReason, ResetType};
 
+mod interrupts;
 mod logger;
 mod memory;
 mod panic;
@@ -34,6 +36,8 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
             .starting_address,
     );
 
+    interrupts::init();
+
     info!("booting ANNEX kernel");
     debug!("currently running on hart {}", hart_id);
 
@@ -43,6 +47,8 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
     }
 
     memory::init(fdt.memory().regions());
+
+    unsafe { core::ptr::null_mut::<usize>().write_volatile(4) }
 
     halt();
 }
