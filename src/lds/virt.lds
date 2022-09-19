@@ -3,6 +3,7 @@ ENTRY(_start);
 . = 0x80200000;
  
 SECTIONS {
+	__kernel_start = .;
 	/* Include entry point at start of binary */
 	.text : ALIGN(4K) {
 		*(.init);
@@ -23,4 +24,5 @@ SECTIONS {
 	.data : ALIGN(4K) {
 		*(.data);
 	}
+	__kernel_end = .;
 }
