@@ -47,6 +47,7 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
     halt();
 }
 
+#[allow(dead_code)]
 fn abort() -> ! {
     error!("aborting execution");
     loop {
@@ -56,6 +57,7 @@ fn abort() -> ! {
     }
 }
 
+#[allow(dead_code)]
 fn halt() -> ! {
     warn!("kernel terminated");
     sbi::system_reset::system_reset(ResetType::Shutdown, ResetReason::NoReason).unwrap();

@@ -1,6 +1,7 @@
-/target
-
-
 # Build files
 img_mount/
+target/
 kernel.img
+
+**.dtb
+**.dts
