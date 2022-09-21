@@ -18,6 +18,7 @@ mod interrupts;
 mod logger;
 mod memory;
 mod panic;
+mod riscv;
 
 #[no_mangle]
 pub extern "C" fn kmain(hart_id: usize, fdt_addr: usize) -> ! {
@@ -52,6 +53,11 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
     memory::init(fdt.memory().regions());
 
     unsafe { core::ptr::null_mut::<usize>().write_volatile(4) }
+    unsafe { asm!("ebreak") }
+    unsafe { asm!("ebreak") }
+    unsafe { core::ptr::null_mut::<usize>().write_volatile(4) }
+    unsafe { asm!("ebreak") }
+    unsafe { asm!("ebreak") }
 
     halt();
 }
