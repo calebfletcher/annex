@@ -1,8 +1,8 @@
 use core::arch::asm;
 
-use log::{debug, error};
+use log::{debug, warn};
 
-use crate::riscv::instructions::instruction_size;
+use crate::{clint, riscv::instructions::instruction_size};
 
 #[derive(Debug)]
 #[repr(C)]
@@ -36,6 +36,25 @@ pub fn init() {
         }
         asm!("csrw stvec, {}", in(reg) value);
     }
+
+    let status: usize;
+    unsafe {
+        asm!("csrr {}, sie", out(reg) status);
+    }
+    debug!("sie {status:X}");
+
+    let sie = 0b1000100010;
+    debug!("enabling interrupts");
+    unsafe {
+        asm!("csrsi sstatus, 0b10");
+        asm!("csrs sie, {}", in(reg) sie);
+    }
+
+    let status: usize;
+    unsafe {
+        asm!("csrr {}, sie", out(reg) status);
+    }
+    debug!("sie {status:X}");
 }
 
 #[link_section = ".trap_handler"]
@@ -81,6 +100,9 @@ extern "C" fn handler() -> ! {
             "csrrw x30, sscratch, x31",
             "sd x30, 240(x31)",
             // TODO: save floating point registers
+            // TODO: look into making this pre-emptible, would need to save all the
+            //       exception-related registers then re-enable higher-priority
+            //       interrupts
             // extract scause/stval/sepc/sstatus
             "csrr a0, sepc",
             "csrr a1, stval",
@@ -126,6 +148,7 @@ extern "C" fn handler() -> ! {
             "ld x30, 232(x31)",
             // restore x31, we don't need it after this
             "ld x31, 232(x31)",
+            // return from exception
             "sret",
             options(noreturn)
         )
@@ -133,11 +156,75 @@ extern "C" fn handler() -> ! {
 }
 
 #[no_mangle]
-extern "C" fn dispatch(epc: usize, tval: usize, cause: usize, status: usize) -> usize {
-    error!(
-        "vector handler: cause={} value={} epc={:X} status={:X}",
-        cause, tval, epc, status
-    );
+extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -> usize {
+    let is_interrupt = cause >> 63 == 1;
+    let cause = cause & !(1 << 63);
+    // warn!(
+    //     "vector handler: interrupt={} cause={:X} value={:X} epc={:X} status={:X}",
+    //     is_interrupt, cause, tval, epc, status
+    // );
+
+    if is_interrupt {
+        match cause {
+            1 => {
+                // software
+                warn!("software interrupt");
+            }
+            5 => {
+                // timer
+                debug!("timer tick");
+                clint::start();
+            }
+            9 => {
+                // external
+                warn!("external interrupt");
+            }
+            _ => warn!("unknown or reserved interrupt"),
+        }
+    } else {
+        match cause {
+            0 => {
+                warn!("instruction address misaligned");
+            }
+            1 => {
+                warn!("instruction access fault");
+            }
+            2 => {
+                warn!("illegal instruction");
+            }
+            3 => {
+                warn!("breakpoint");
+            }
+            4 => {
+                warn!("load address misaligned");
+            }
+            5 => {
+                warn!("load access fault");
+            }
+            6 => {
+                warn!("store/amo address misaligned");
+            }
+            7 => {
+                warn!("store/amo access fault");
+            }
+            8 => {
+                warn!("ecall from u-mode");
+            }
+            9 => {
+                warn!("ecall from s-mode");
+            }
+            12 => {
+                warn!("instruction page fault");
+            }
+            13 => {
+                warn!("load page fault");
+            }
+            15 => {
+                warn!("store/amo page fault");
+            }
+            _ => warn!("unhandled exception"),
+        }
+    }
 
     // return new epc
     epc + instruction_size(epc)

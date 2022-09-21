@@ -14,6 +14,7 @@ use fdt::Fdt;
 use log::{debug, error, info, warn};
 use sbi::system_reset::{ResetReason, ResetType};
 
+mod clint;
 mod interrupts;
 mod logger;
 mod memory;
@@ -52,14 +53,10 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
 
     memory::init(fdt.memory().regions());
 
-    unsafe { core::ptr::null_mut::<usize>().write_volatile(4) }
-    unsafe { asm!("ebreak") }
-    unsafe { asm!("ebreak") }
-    unsafe { core::ptr::null_mut::<usize>().write_volatile(4) }
-    unsafe { asm!("ebreak") }
-    unsafe { asm!("ebreak") }
+    clint::init(1_000_000_000, &fdt);
+    clint::start();
 
-    halt();
+    abort();
 }
 
 #[allow(dead_code)]
