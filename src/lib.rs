@@ -2,6 +2,9 @@
 #![no_main]
 #![feature(panic_info_message)]
 #![feature(naked_functions)]
+#![forbid(unsafe_op_in_unsafe_fn)]
+#![forbid(unused_unsafe)]
+#![forbid(clippy::not_unsafe_ptr_arg_deref)]
 
 global_asm!(include_str!("asm/boot.S"));
 
