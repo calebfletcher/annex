@@ -181,31 +181,33 @@ extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -
             }
             _ => warn!("unknown or reserved interrupt"),
         }
+        // return to epc, the same instruction the interrupt occured on
+        epc
     } else {
         match cause {
             0 => {
-                warn!("instruction address misaligned");
+                panic!("instruction address misaligned");
             }
             1 => {
-                warn!("instruction access fault");
+                panic!("instruction access fault");
             }
             2 => {
-                warn!("illegal instruction");
+                panic!("illegal instruction");
             }
             3 => {
                 warn!("breakpoint");
             }
             4 => {
-                warn!("load address misaligned");
+                panic!("load address misaligned");
             }
             5 => {
-                warn!("load access fault");
+                panic!("load access fault");
             }
             6 => {
-                warn!("store/amo address misaligned");
+                panic!("store/amo address misaligned");
             }
             7 => {
-                warn!("store/amo access fault");
+                panic!("store/amo access fault");
             }
             8 => {
                 warn!("ecall from u-mode");
@@ -214,18 +216,17 @@ extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -
                 warn!("ecall from s-mode");
             }
             12 => {
-                warn!("instruction page fault");
+                panic!("instruction page fault");
             }
             13 => {
-                warn!("load page fault");
+                panic!("load page fault");
             }
             15 => {
-                warn!("store/amo page fault");
+                panic!("store/amo page fault");
             }
-            _ => warn!("unhandled exception"),
+            _ => panic!("unhandled exception"),
         }
+        // Return to instruction following the exception
+        epc + instruction_size(epc)
     }
-
-    // return new epc
-    epc + instruction_size(epc)
 }
