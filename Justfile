@@ -18,7 +18,6 @@ mount_dir := "./img_mount"
 
 # File Paths
 u-boot_path := u-boot_dir + "u-boot.bin"
-lib_file := out_dir + "libannex_risc_v.a"
 elf_file := out_dir + "annex-risc-v"
 bin_file := out_dir + "kernel.bin"
 uimage_file := out_dir + "kernel.uimage"

@@ -1,12 +1,30 @@
 use fdt::standard_nodes::MemoryRegion;
 use log::info;
 
-const PAGE_SIZE: usize = 4096; // 4KiB
+use crate::{csr, paging};
 
 // These symbols are exposed by the linkerscript
 extern "C" {
     static __kernel_start: u8;
     static __kernel_end: u8;
+}
+
+struct FrameAllocator<I: Iterator<Item = usize>> {
+    available_pages: I,
+}
+
+impl FrameAllocator<core::iter::StepBy<core::ops::Range<usize>>> {
+    pub fn new(base: usize, size: usize) -> Self {
+        let end = base + size;
+        let i = (base..end).step_by(paging::PAGE_SIZE);
+        Self { available_pages: i }
+    }
+}
+
+impl<I: Iterator<Item = usize>> FrameAllocator<I> {
+    pub fn next(&mut self) -> Option<*mut u8> {
+        self.available_pages.next().map(|addr| addr as _)
+    }
 }
 
 pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
@@ -32,14 +50,28 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     }
 
     // Calculate the remaining space
-    let memory_base = align_up(kernel_end, PAGE_SIZE);
+    let memory_base = align_up(kernel_end, paging::PAGE_SIZE);
     let memory_size = region.size.unwrap() - kernel_size;
     info!(
         "using memory segment at address {:X} with size {:X} bytes",
         memory_base, memory_size
-    )
+    );
 
-    // TODO: Create an allocator with this space
+    // Create an allocator with this space
+    let mut frame_allocator = FrameAllocator::new(memory_base, memory_size);
+
+    // Create a new page table
+    let table = frame_allocator.next().unwrap();
+    let table = unsafe { paging::PageTable::new(table) };
+    table.setup_identity_map();
+    info!("hello");
+
+    // Update satp with the new page table
+    let mut satp = csr::Satp::read();
+    satp.set_asid(0);
+    satp.set_mode(8);
+    satp.set_ppn(paging::PageTable::ppn(table) as u64);
+    satp.write();
 }
 
 fn get_kernel_range() -> (usize, usize) {

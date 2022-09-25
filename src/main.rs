@@ -15,9 +15,11 @@ use log::{debug, error, info, warn};
 use sbi::system_reset::{ResetReason, ResetType};
 
 mod clint;
+mod csr;
 mod interrupts;
 mod logger;
 mod memory;
+mod paging;
 mod panic;
 mod plic;
 mod riscv;
