@@ -18,19 +18,25 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     }
 
     // Find out where the kernel file was loaded to
-    let (start, end) = get_kernel_range();
-    info!("kernel loaded from {:X} to {:X}", start, end);
-    let kernel_size = end - start;
+    let (kernel_start, kernel_end) = get_kernel_range();
+    info!("kernel loaded from {:X} to {:X}", kernel_start, kernel_end);
+    let kernel_size = kernel_end - kernel_start;
 
-    // TODO: Fix the fact that the kernel isn't loaded at the start of RAM, needs to take this into account
+    // Ensure this is the main memory segment
+    if kernel_end < region.starting_address as usize
+        || kernel_end
+            > (region.starting_address as usize
+                + region.size.expect("memory region has to have a size"))
+    {
+        panic!("kernel not loaded in memory segment");
+    }
 
     // Calculate the remaining space
-    let memory_base_original = region.starting_address as usize + kernel_size;
-    let memory_base = align_up(memory_base_original, PAGE_SIZE);
-    let memory_size = region.size.expect("memory region has to have a size") - kernel_size;
+    let memory_base = align_up(kernel_end, PAGE_SIZE);
+    let memory_size = region.size.unwrap() - kernel_size;
     info!(
-        "using memory segment at address {:X} with size {:X} bytes {:X}",
-        memory_base, memory_size, memory_base_original
+        "using memory segment at address {:X} with size {:X} bytes",
+        memory_base, memory_size
     )
 
     // TODO: Create an allocator with this space
