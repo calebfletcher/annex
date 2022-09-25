@@ -1,2 +1,6 @@
 [build]
 target = "riscv64gc-unknown-none-elf"
+
+[target.riscv64gc-unknown-none-elf]
+linker = "riscv64-unknown-elf-gcc"
+rustflags = ["-C", "link-arg=-Tsrc/lds/virt.lds", "-C", "link-arg=-nostdlib"]
