@@ -18,7 +18,7 @@ mount_dir := "./img_mount"
 
 # File Paths
 u-boot_path := u-boot_dir + "u-boot.bin"
-elf_file := out_dir + "annex-risc-v"
+elf_file := out_dir + "annex"
 bin_file := out_dir + "kernel.bin"
 uimage_file := out_dir + "kernel.uimage"
 img_file := out_dir + "kernel.img"

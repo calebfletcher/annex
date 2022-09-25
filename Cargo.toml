@@ -1,5 +1,5 @@
 [package]
-name = "annex-risc-v"
+name = "annex"
 version = "0.1.0"
 edition = "2021"
 
