@@ -19,6 +19,7 @@ mod interrupts;
 mod logger;
 mod memory;
 mod panic;
+mod plic;
 mod riscv;
 
 #[no_mangle]
@@ -55,6 +56,8 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
 
     clint::init(1_000_000_000, &fdt);
     clint::start();
+
+    plic::init(&fdt);
 
     abort();
 }

@@ -2,7 +2,7 @@ use core::arch::asm;
 
 use log::{debug, warn};
 
-use crate::{clint, riscv::instructions::instruction_size};
+use crate::{clint, plic, riscv::instructions::instruction_size};
 
 #[derive(Debug)]
 #[repr(C)]
@@ -17,9 +17,8 @@ static mut TRAP_CONTEXT: TrapContext = TrapContext {
 };
 
 pub fn init() {
-    debug!("initialising trap scratch location");
-
     // Put a location to store context in sscratch
+    debug!("initialising trap scratch location");
     let context = unsafe { &TRAP_CONTEXT as *const TrapContext };
     unsafe {
         asm!(
@@ -28,6 +27,7 @@ pub fn init() {
         );
     }
 
+    // Register trap handler into stvec
     debug!("registering trap handler");
     unsafe {
         let value = handler as *const () as usize;
@@ -37,24 +37,15 @@ pub fn init() {
         asm!("csrw stvec, {}", in(reg) value);
     }
 
-    let status: usize;
-    unsafe {
-        asm!("csrr {}, sie", out(reg) status);
-    }
-    debug!("sie {status:X}");
-
+    // Enable all interrupts
     let sie = 0b1000100010;
     debug!("enabling interrupts");
     unsafe {
+        // Set SIE bit in sstatus
         asm!("csrsi sstatus, 0b10");
+        // Set all supervisor-level bits in sie
         asm!("csrs sie, {}", in(reg) sie);
     }
-
-    let status: usize;
-    unsafe {
-        asm!("csrr {}, sie", out(reg) status);
-    }
-    debug!("sie {status:X}");
 }
 
 #[link_section = ".trap_handler"]
@@ -177,7 +168,18 @@ extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -
             }
             9 => {
                 // external
-                warn!("external interrupt");
+                if let Some(id) = plic::claim() {
+                    if id == 10 {
+                        // UART
+                        let serial_char = unsafe { (0x1000_0000 as *const u8).read_volatile() };
+                        debug!("serial char: {serial_char}")
+                    } else {
+                        warn!("unknown external interrupt {id}");
+                    }
+                    plic::complete(id);
+                } else {
+                    warn!("external interrupt triggered but no claim");
+                }
             }
             _ => warn!("unknown or reserved interrupt"),
         }
