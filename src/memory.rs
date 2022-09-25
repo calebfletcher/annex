@@ -16,7 +16,7 @@ struct FrameAllocator<I: Iterator<Item = usize>> {
 impl FrameAllocator<core::iter::StepBy<core::ops::Range<usize>>> {
     pub fn new(base: usize, size: usize) -> Self {
         let end = base + size;
-        let i = (base..end).step_by(paging::PAGE_SIZE);
+        let i = (base..end).step_by(paging::PageSize::Normal.size());
         Self { available_pages: i }
     }
 }
@@ -50,7 +50,7 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     }
 
     // Calculate the remaining space
-    let memory_base = align_up(kernel_end, paging::PAGE_SIZE);
+    let memory_base = align_up(kernel_end, paging::PageSize::Normal.size());
     let memory_size = region.size.unwrap() - kernel_size;
     info!(
         "using memory segment at address {:X} with size {:X} bytes",
@@ -64,7 +64,6 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     let table = frame_allocator.next().unwrap();
     let table = unsafe { paging::PageTable::new(table) };
     table.setup_identity_map();
-    info!("hello");
 
     // Update satp with the new page table
     let mut satp = csr::Satp::read();

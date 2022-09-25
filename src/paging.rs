@@ -1,12 +1,9 @@
 use bitfield::bitfield;
 use log::info;
 
-pub const PAGE_SIZE_BITS: usize = 12;
-pub const PAGE_SIZE: usize = 1 << PAGE_SIZE_BITS; // 4KiB
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum PageSize {
+pub enum PageSize {
     Normal,
     Mega,
     Giga,
