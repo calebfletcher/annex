@@ -1,7 +1,10 @@
 use fdt::standard_nodes::MemoryRegion;
 use log::info;
 
-use crate::{csr, paging};
+use crate::{allocator, csr, paging};
+
+pub const HEAP_START: *mut u8 = 0x_4444_0000_0000 as *mut _;
+pub const HEAP_SIZE: usize = 48 * 1024 * 1024; // 16 MiB
 
 // These symbols are exposed by the linkerscript
 extern "C" {
@@ -71,6 +74,10 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     satp.set_mode(8);
     satp.set_ppn(paging::PageTable::ppn(table) as u64);
     satp.write();
+
+    // Initialise the memory allocator
+    allocator::init(|| allocator::FixedSizeBlockAllocator::new(HEAP_START, HEAP_SIZE));
+
 }
 
 fn get_kernel_range() -> (usize, usize) {
@@ -85,6 +92,6 @@ fn get_kernel_range() -> (usize, usize) {
 /// Align the given address `addr` upwards to alignment `align`.
 ///
 /// Requires that `align` is a power of two.
-fn align_up(addr: usize, align: usize) -> usize {
+pub fn align_up(addr: usize, align: usize) -> usize {
     (addr + align - 1) & !(align - 1)
 }

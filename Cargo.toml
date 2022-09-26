@@ -10,6 +10,7 @@ bitfield = "0.14.0"
 conquer-once = { version = "0.3.2", default-features = false }
 fdt = "0.1.4"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+linked_list_allocator = "0.10.3"
 log = "0.4.17"
 sbi = "0.2.0"
 spin = { version = "0.9.4", default-features = false, features = [

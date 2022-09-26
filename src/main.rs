@@ -2,11 +2,15 @@
 #![no_main]
 #![feature(panic_info_message)]
 #![feature(naked_functions)]
+#![feature(const_mut_refs)]
+#![feature(default_alloc_error_handler)]
 #![forbid(unsafe_op_in_unsafe_fn)]
 #![forbid(unused_unsafe)]
 #![forbid(clippy::not_unsafe_ptr_arg_deref)]
 
 global_asm!(include_str!("asm/boot.S"));
+
+extern crate alloc;
 
 use core::arch::{asm, global_asm};
 
@@ -14,6 +18,7 @@ use fdt::Fdt;
 use log::{debug, error, info, warn};
 use sbi::system_reset::{ResetReason, ResetType};
 
+mod allocator;
 mod clint;
 mod csr;
 mod interrupts;
