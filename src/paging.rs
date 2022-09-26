@@ -1,5 +1,7 @@
 use bitfield::bitfield;
-use log::info;
+use log::{debug, info, warn};
+
+use crate::memory::FrameAllocator;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,6 +28,21 @@ impl PageSize {
     /// Size of the page in bytes.
     pub const fn size(&self) -> usize {
         1 << self.bits()
+    }
+
+    #[allow(dead_code)]
+    pub const fn round_down(size: usize) -> Self {
+        if size >= PageSize::Peta.size() {
+            PageSize::Peta
+        } else if size >= PageSize::Tera.size() {
+            PageSize::Tera
+        } else if size >= PageSize::Giga.size() {
+            PageSize::Giga
+        } else if size >= PageSize::Mega.size() {
+            PageSize::Mega
+        } else {
+            PageSize::Normal
+        }
     }
 }
 
@@ -59,7 +76,7 @@ impl PageTable {
 
         let mut current_base = 0;
         for entry in self.inner.iter_mut() {
-            info!("identity mapping 0x{:X}", current_base);
+            //info!("identity mapping 0x{:X}", current_base);
 
             let phys_addr = Sv39Physical(current_base as u64);
 
@@ -77,6 +94,89 @@ impl PageTable {
             }
         }
     }
+
+    /// Map a page of memory.
+    ///
+    /// This should only be called on the root table.
+    ///
+    /// Returns Err if the requested region was already mapped.
+    pub fn map<I: Iterator<Item = usize>>(
+        &mut self,
+        virt: Sv39Virtual,
+        phys: Sv39Physical,
+        frame_allocator: &mut FrameAllocator<I>,
+    ) -> Result<(), ()> {
+        // Extract the indexes into each of the tables
+        let vpn_0 = virt.vpn(0) as usize;
+        let vpn_1 = virt.vpn(1) as usize;
+        let vpn_2 = virt.vpn(2) as usize;
+
+        // Descend page tables, creating any missing tables
+        let entry = &mut self.inner[vpn_2];
+        let next = descend_table(entry, frame_allocator)?;
+        let entry = &mut next.inner[vpn_1];
+        let next = descend_table(entry, frame_allocator)?;
+        let entry = &mut next.inner[vpn_0];
+
+        // Setup the entry to map to the desired physical address
+        entry.set_ppn_0(phys.ppn_0());
+        entry.set_ppn_1(phys.ppn_1());
+        entry.set_ppn_2(phys.ppn_2());
+
+        // Set the entry's permissions
+        entry.set_r(true);
+        entry.set_w(true);
+        entry.set_x(true);
+
+        // TODO: Some implementations might need this depending on which A/D
+        //       mode they implement
+        //entry.set_accessed(true);
+        //entry.set_dirty(true);
+
+        entry.set_valid(true);
+
+        Ok(())
+    }
+
+    pub fn lookup(&mut self, virt: Sv39Virtual) -> Result<Sv39Physical, ()> {
+        let vpn_0 = virt.vpn(0) as usize;
+        let vpn_1 = virt.vpn(1) as usize;
+        let vpn_2 = virt.vpn(2) as usize;
+
+        let entry = &mut self.inner[vpn_2];
+        let next = entry.as_table_mut().ok_or(())?;
+        let entry = &mut next.inner[vpn_1];
+        let next = entry.as_table_mut().ok_or(())?;
+        let entry = &mut next.inner[vpn_0];
+
+        entry.as_physical_addr().ok_or(())
+    }
+}
+
+fn descend_table<I: Iterator<Item = usize>>(
+    entry: &mut PageTableEntry,
+    frame_allocator: &mut FrameAllocator<I>,
+) -> Result<&'static mut PageTable, ()> {
+    if entry.valid() && !entry.next_level() {
+        // Entry already points to a mapping
+        warn!("entry points to a an existing mapping");
+        return Err(());
+    }
+
+    if !entry.valid() {
+        // Create new page table
+        let table = frame_allocator.next().unwrap();
+        //debug!("allocated table at {:p}", table);
+        let table = unsafe { PageTable::new(table) };
+        let table_phys = Sv39Physical(table as *mut PageTable as u64);
+        entry.set_ppn_0(table_phys.ppn_0());
+        entry.set_ppn_1(table_phys.ppn_1());
+        entry.set_ppn_2(table_phys.ppn_2());
+        entry.set_next_level();
+        entry.set_valid(true);
+    }
+
+    Ok(entry.as_table_mut().unwrap())
 }
 
 bitfield! {
@@ -110,6 +210,29 @@ impl PageTableEntry {
 
     pub fn next_level(&self) -> bool {
         !self.r() && !self.w() && !self.x()
+    }
+
+    /// Get the physical address the entry points to
+    pub fn as_physical_addr(&self) -> Option<Sv39Physical> {
+        if !self.valid() {
+            return None;
+        }
+
+        let mut phys_addr = Sv39Physical(0);
+        phys_addr.set_ppn_0(self.ppn_0());
+        phys_addr.set_ppn_1(self.ppn_1());
+        phys_addr.set_ppn_2(self.ppn_2());
+
+        Some(phys_addr)
+    }
+
+    pub fn as_table_mut(&mut self) -> Option<&'static mut PageTable> {
+        // # Safety
+        // This assumes that physical memory is identiy-mapped, and that the
+        // only way to get a mutable reference to the child page table is
+        // through the entry itself, and that no page table is referenced from
+        // multiple entries at any given time.
+        Some(unsafe { &mut *(self.as_physical_addr()?.0 as *mut PageTable) })
     }
 }
 

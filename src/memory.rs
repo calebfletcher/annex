@@ -1,9 +1,11 @@
+use core::arch::asm;
+
 use fdt::standard_nodes::MemoryRegion;
-use log::info;
+use log::{debug, info};
 
 use crate::{allocator, csr, paging};
 
-pub const HEAP_START: *mut u8 = 0x_4444_0000_0000 as *mut _;
+pub const HEAP_START: *mut u8 = 0xFFFF_FFC0_0000_0000 as *mut _;
 pub const HEAP_SIZE: usize = 48 * 1024 * 1024; // 16 MiB
 
 // These symbols are exposed by the linkerscript
@@ -12,7 +14,7 @@ extern "C" {
     static __kernel_end: u8;
 }
 
-struct FrameAllocator<I: Iterator<Item = usize>> {
+pub struct FrameAllocator<I: Iterator<Item = usize>> {
     available_pages: I,
 }
 
@@ -75,9 +77,36 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     satp.set_ppn(paging::PageTable::ppn(table) as u64);
     satp.write();
 
+    // Allocate memory for entire heap range
+    let mut length = HEAP_SIZE;
+    let mut virt_addr = HEAP_START;
+    while length > 0 {
+        let next_page = frame_allocator.next().unwrap();
+
+        table
+            .map(
+                paging::Sv39Virtual(virt_addr as u64),
+                paging::Sv39Physical(next_page as u64),
+                &mut frame_allocator,
+            )
+            .unwrap();
+
+        virt_addr = unsafe { virt_addr.add(paging::PageSize::Normal.size()) };
+        length -= paging::PageSize::Normal.size();
+    }
+
+    let heap_start = HEAP_START as usize;
+    let heap_end = heap_start + HEAP_SIZE - 4096;
+    info!("heap mapped from 0x{:X} to 0x{:X}", heap_start, heap_end);
+
+    // Flush TLB
+    // TODO: Only flush this ASID and relevant address range
+    unsafe {
+        asm!("sfence.vma x0, x0");
+    }
+
     // Initialise the memory allocator
     allocator::init(|| allocator::FixedSizeBlockAllocator::new(HEAP_START, HEAP_SIZE));
-
 }
 
 fn get_kernel_range() -> (usize, usize) {
