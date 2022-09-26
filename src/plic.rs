@@ -1,5 +1,6 @@
 use conquer_once::spin::OnceCell;
 use fdt::Fdt;
+use log::debug;
 
 static PLIC: OnceCell<Plic> = OnceCell::uninit();
 
@@ -21,6 +22,18 @@ pub fn init(fdt: &Fdt) {
     PLIC.init_once(|| Plic {
         base_address: base_address as usize,
     });
+
+    // Parse available contexts from the FDT
+    let contexts = plic_node.property("interrupts-extended").unwrap();
+    let contexts = contexts.value.chunks_exact(8).map(|bytes| {
+        (
+            i32::from_be_bytes(bytes[..4].try_into().unwrap()),
+            i32::from_be_bytes(bytes[4..].try_into().unwrap()),
+        )
+    });
+    for context in contexts {
+        debug!("contexts {:?}", context);
+    }
 
     // Allow all interrupts through the PLIC
     set_threshold(0);
