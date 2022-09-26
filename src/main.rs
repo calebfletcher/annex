@@ -48,8 +48,7 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
             .unwrap()
             .starting_address,
     );
-
-    interrupts::init();
+    memory::init(fdt.memory().regions());
 
     info!("booting ANNEX kernel");
     debug!("currently running on hart {}", hart_id);
@@ -59,11 +58,9 @@ fn entrypoint(hart_id: usize, fdt: Fdt) -> ! {
         debug!("  {}: {:?}", hart, sbi::hsm::hart_status(hart).unwrap());
     }
 
-    memory::init(fdt.memory().regions());
-
+    interrupts::init();
     clint::init(1_000_000_000, &fdt);
     clint::start();
-
     plic::init(&fdt);
 
     abort();
