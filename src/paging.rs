@@ -1,5 +1,5 @@
 use bitfield::bitfield;
-use log::{debug, info, warn};
+use log::warn;
 
 use crate::memory::FrameAllocator;
 

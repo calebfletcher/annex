@@ -1,7 +1,7 @@
 use core::arch::asm;
 
 use fdt::standard_nodes::MemoryRegion;
-use log::{debug, info};
+use log::info;
 
 use crate::{allocator, csr, paging};
 
@@ -81,8 +81,10 @@ pub fn init(mut regions: impl Iterator<Item = MemoryRegion>) {
     let mut length = HEAP_SIZE;
     let mut virt_addr = HEAP_START;
     while length > 0 {
+        // Find a free frame
         let next_page = frame_allocator.next().unwrap();
 
+        // Map the frame to the heap
         table
             .map(
                 paging::Sv39Virtual(virt_addr as u64),
