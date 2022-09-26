@@ -147,7 +147,7 @@ extern "C" fn handler() -> ! {
 }
 
 #[no_mangle]
-extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -> usize {
+extern "C" fn dispatch(epc: usize, tval: usize, cause: usize, _status: usize) -> usize {
     let is_interrupt = cause >> 63 == 1;
     let cause = cause & !(1 << 63);
     // warn!(
@@ -188,10 +188,16 @@ extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -
     } else {
         match cause {
             0 => {
-                panic!("instruction address misaligned");
+                panic!(
+                    "instruction address misaligned, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             1 => {
-                panic!("instruction access fault");
+                panic!(
+                    "instruction access fault, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             2 => {
                 panic!("illegal instruction");
@@ -200,16 +206,25 @@ extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -
                 warn!("breakpoint");
             }
             4 => {
-                panic!("load address misaligned");
+                panic!(
+                    "load address misaligned, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             5 => {
-                panic!("load access fault");
+                panic!("load access fault, epc=0x{:X} accessed=0x{:X}", epc, tval);
             }
             6 => {
-                panic!("store/amo address misaligned");
+                panic!(
+                    "store/amo address misaligned, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             7 => {
-                panic!("store/amo access fault");
+                panic!(
+                    "store/amo access fault, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             8 => {
                 warn!("ecall from u-mode");
@@ -218,13 +233,19 @@ extern "C" fn dispatch(epc: usize, _tval: usize, cause: usize, _status: usize) -
                 warn!("ecall from s-mode");
             }
             12 => {
-                panic!("instruction page fault");
+                panic!(
+                    "instruction page fault, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             13 => {
-                panic!("load page fault");
+                panic!("load page fault, epc=0x{:X} accessed=0x{:X}", epc, tval);
             }
             15 => {
-                panic!("store/amo page fault");
+                panic!(
+                    "store/amo page fault, epc=0x{:X} accessed=0x{:X}",
+                    epc, tval
+                );
             }
             _ => panic!("unhandled exception"),
         }
